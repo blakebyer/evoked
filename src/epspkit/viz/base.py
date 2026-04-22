@@ -6,7 +6,11 @@ from pathlib import Path
 from epspkit.core.context import RecordingContext
 from epspkit.core.config import VizConfig, SmoothingConfig
 from epspkit.features.base import Feature
-import scienceplots
+
+try:
+    import scienceplots  # noqa: F401
+except ImportError:
+    scienceplots = None
 
 
 class Plot(ABC):

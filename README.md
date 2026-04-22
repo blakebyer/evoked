@@ -37,11 +37,14 @@ pipeline_config = PipelineConfig(
     io=IOConfig(
         input_paths=["/path/to/recording.abf"],
         output_path="/path/to/output/results.xlsx",
+        plot_pdf_path="/path/to/output/run_plots.pdf",
         repnum=3,
         stim_intensities=[25, 50, 75, 100, 150, 200],
         metadata={"experimenter": "name", "notes": "pilot run"},
         write_results=True,
         write_plots=True,
+        write_plot_pdf=True,
+        plot_pdf_plots_per_page=6,
         render_plots=False,
     ),
     transforms=[
@@ -91,6 +94,7 @@ poetry install -E notebook
 - Results are written to one Excel (.xlsx) per input file named `{stem}_results.xlsx`.
 - Each workbook contains sheets: `tidy` (raw data), `averaged` (averaged per stimulus intensity), `result_*` (feature results), `metadata` (optional metadata), `pipeline_config` (configuration for reproducibility).
 - Plot images are saved as `{stem}_{plot}.png` when `write_plots=True`.
+- A bundled plot PDF is written when `write_plot_pdf=True`, with `plot_pdf_plots_per_page` controlling how many plots are placed on each page.
 
 ## Notes
 - Feature params are required (no implicit defaults).

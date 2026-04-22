@@ -54,12 +54,17 @@ class IOConfig:
     I/O and basic acquisition configuration for a pipeline run.
     """
     input_paths: Sequence[str] = field(default_factory=list)
+    template_files: Sequence[str] = field(default_factory=list)
+    test_files: Sequence[str] = field(default_factory=list)
     output_path: Path | None = None
+    plot_pdf_path: Path | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     repnum: int = 3
     stim_intensities: Sequence[float] = field(default_factory=list)
     write_results: bool = True
     write_plots: bool = False
+    write_plot_pdf: bool = False
+    plot_pdf_plots_per_page: int = 4
     render_plots: bool = True
 
 @dataclass

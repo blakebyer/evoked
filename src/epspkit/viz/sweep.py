@@ -46,9 +46,9 @@ class SweepPlot(Plot):
                     y = g["mean"].to_numpy()
                     y = self.apply_smoothing(y, fs=fs)
 
-                    ax.plot(x, y, label=f"{stim}", color=color)
+                    ax.plot(x, y, color=color, label=f"{stim}")
 
-                ax.set_title('Evoked Field Potentials')
+                ax.set_title('Evoked Field Potential')
                 ax.set_xlabel('Time (ms)')
                 ax.set_ylabel('Response (mV)')
                 ax.legend(title='Stimulus Intensity (µA)')

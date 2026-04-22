@@ -1,13 +1,53 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from collections.abc import Collection
 
 import numpy as np
 
 from epspkit.core.config import FeatureConfig, SmoothingConfig
 from epspkit.core.context import RecordingContext
 from epspkit.core import math as emath
+
+
+def apply_smoothing(
+    y,
+    smoothing: SmoothingConfig | None,
+    fs: float | None = None,
+):
+    """
+    Apply a configured smoothing policy to a 1D trace.
+    """
+    cfg = smoothing or SmoothingConfig()
+
+    if cfg.method == "none":
+        return y
+
+    y_arr = np.asarray(y)
+
+    if cfg.method == "moving_average":
+        return emath.moving_average(y_arr, cfg.window_size)
+
+    if cfg.method == "savgol":
+        window = cfg.window_size
+        poly = cfg.polyorder
+
+        if window % 2 == 0:
+            window += 1
+        if window <= poly:
+            raise ValueError(
+                f"Savgol requires window_size > polyorder "
+                f"(got window_size={window}, polyorder={poly})."
+            )
+
+        return emath.savgol(y_arr, window, poly)
+
+    if cfg.method == "butter_lowpass":
+        if fs is None:
+            raise ValueError("Butterworth smoothing requires a sampling rate fs.")
+        return emath.butter_lowpass(y_arr, cfg.cutoff, fs, order=cfg.order)
+
+    raise ValueError(f"Unknown smoothing method: {cfg.method}")
 
 
 class Feature(ABC):
@@ -50,6 +90,17 @@ class Feature(ABC):
             or SmoothingConfig()
         )
 
+    def resolve_method(self, default: str, allowed: Collection[str]) -> str:
+        """Return the configured detector method after validating allowed values."""
+        method = str(self.config.params.get("method", default)).lower()
+        if method not in allowed:
+            options = ", ".join(sorted(allowed))
+            raise ValueError(
+                f"Unknown method '{method}' for feature '{self.name}'. "
+                f"Available: {options}"
+            )
+        return method
+
     @abstractmethod
     def run(self, context: RecordingContext) -> RecordingContext:
         """Perform feature extraction on the given recording context."""
@@ -68,34 +119,4 @@ class Feature(ABC):
         fs
             Sampling rate in Hz. Required for Butterworth smoothing.
         """
-        cfg = self.smoothing
-
-        if cfg.method == "none":
-            return y
-
-        y_arr = np.asarray(y)
-
-        if cfg.method == "moving_average":
-            return emath.moving_average(y_arr, cfg.window_size)
-
-        if cfg.method == "savgol":
-            window = cfg.window_size
-            poly = cfg.polyorder
-
-            # enforce odd window and basic validity
-            if window % 2 == 0:
-                window += 1
-            if window <= poly:
-                raise ValueError(
-                    f"Savgol requires window_size > polyorder "
-                    f"(got window_size={window}, polyorder={poly})."
-                )
-
-            return emath.savgol(y_arr, window, poly)
-
-        if cfg.method == "butter_lowpass":
-            if fs is None:
-                raise ValueError("Butterworth smoothing requires a sampling rate fs.")
-            return emath.butter_lowpass(y_arr, cfg.cutoff, fs, order=cfg.order)
-
-        raise ValueError(f"Unknown smoothing method: {cfg.method}")
+        return apply_smoothing(y, self.smoothing, fs=fs)

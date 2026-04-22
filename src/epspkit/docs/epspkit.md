@@ -1,159 +1,165 @@
 # epspkit
 
-This document describes the pipeline and input-output configurations, and the knobs/dials for each feature.
+## Pipeline
+Typical order:
+1. Load ABF files into a tidy table.
+2. Apply transforms in order.
+3. Average sweeps by `stim_intensity`.
+4. Run features in the configured order.
+5. Save plots and results if enabled.
 
-## Pipeline overview
-The pipeline is configured with a `PipelineConfig` that controls:
-- `io`: input/output settings, output path, metadata, and write/render flags
-- `transforms`: ordered list of transforms (baseline, stim artifact removal, average)
-- `features`: feature analyzers and their parameters
-- `plots`: plot selection and optional per-plot smoothing
-- `global_smoothing`: default smoothing policy used by features and plots unless overridden
+## IOConfig
+Use one of these input patterns:
+- `input_paths`: analyze those files directly.
+- `template_files` + `test_files`: build templates from `template_files`, then analyze only `test_files`.
 
-A typical flow is:
-1) Load ABF → tidy DataFrame
-2) Apply transforms in order
-3) Average sweeps → averaged DataFrame
-4) Run features → results tables
-5) Render/save plots → PNGs
-6) Save results → XLSX with tidy/averaged/results/metadata/config
+Common fields:
+- `output_path`
+- `stim_intensities`
+- `repnum`
+- `write_results`
+- `write_plots`
+- `write_plot_pdf`
+- `render_plots`
 
-## IO Config
-The `IOConfig` section controls data input, output, and sweep organization.
+## Template matching
+Template matching is feature-specific and is enabled with `params["method"] = "template"`.
 
-Required fields:
-- `input_paths` (list[str]): paths to ABF files.
-- `output_path` (str | Path): directory or file path for XLSX/plots when writing.
-- `stim_intensities` (list[float]): ordered list matching the acquisition order. Does not necessarily have to be stimulus intensity, but must be specified since it is a grouping variable for averaging traces.
-- `repnum` (int): number of sweeps per stimulus intensity.
+Current behavior:
+- Templates are built automatically from `io.template_files`.
+- The same preprocessing used on test files is applied to template files first.
+- Template building is shared across intensities by default.
+- You can restrict template building for a feature with `template_stim_intensities`.
+- `window_ms` is the local feature snippet used to build the template.
+- `search_window_ms` is the broader region where the feature center is allowed to move during detection.
+- The template must fit fully inside `search_window_ms`.
 
-Important:
-- `repnum` must be constant across all stimulus intensities for a given recording.
-  The loader assumes `len(stim_intensities) * repnum == number_of_sweeps`.
-  If repnum varies by intensity, the loader will raise an error or mis-assign sweeps.
-- `{stem}` refers to the input_path filename before the `.abf` extension (e.g., "2025_05_0001.abf" → "2025_05_0001").
+Matching outputs:
+- `template_score`: cosine similarity between the candidate snippet and the template.
+- `template_scale`: least-squares scale factor for the matched template.
 
-Optional fields:
-- `metadata` (dict): free-form key/value pairs saved into the XLSX metadata sheet.
-- `write_results` (bool): save `{stem}_results.xlsx`.
-- `write_plots` (bool): save plot images.
-- `render_plots` (bool): show plots on screen.
+Signal space:
+- `fiber_volley`: template match on voltage.
+- `epsp`: template match on the first derivative.
+- `pop_spike`: template match on voltage.
 
-## Feature knobs and dials
+## Features
 
-### FiberVolleyFeature (`name="fiber_volley"`)
-Required params:
-- `window_ms` (tuple[float, float])
-  - Time window in milliseconds after stimulus onset to search for the fiber volley.
-  - Example: `(0.0, 1.5)`
-
-Outputs:
-- `fv_amp`: absolute amplitude of the volley (mV)
-- `fv_s`: time (s) of detected volley
-- `fv_v`: voltage (mV) at volley
-
-### EPSPFeature (`name="epsp"`)
-Required params:
-- `window_ms` (tuple[float, float])
-  - Time window in milliseconds for searching the EPSP trough and slope.
-  - Example: `(1.5, 5.0)`
-- `fit_distance` (int)
-  - Number of points on either side of the slope minimum used to fit a line.
-  - Example: `4`
+### FiberVolleyFeature
+Key params:
+- `method`: `"peak"` or `"template"`
+- `window_ms`: local FV window
+- `search_window_ms`: detection region
+- `height`: peak-mode trough magnitude threshold in mV
+- `template_score_threshold`: optional acceptance threshold in template mode
 
 Outputs:
-- `epsp_s`, `epsp_v`: time/voltage at EPSP minimum
-- `slope_mid_s`, `slope_mid_v`: time/voltage at slope minimum
-- `epsp_amp`: absolute EPSP amplitude
-- `epsp_slope`: absolute slope (mV/ms)
-- `epsp_r2`: fit quality
-- `epsp_to_fv`: slope divided by FV amplitude (requires FV result)
+- `fv_amp`
+- `fv_s`
+- `fv_v`
 
-Notes:
-- If FiberVolleyFeature is not run, `epsp_to_fv` is `NaN` and a warning is raised.
-
-### PopSpikeFeature (`name="pop_spike"`)
-Required params:
-- `lag_ms` (float)
-  - Search window length after the EPSP minimum (ms).
-  - Example: `3.0`
-- `prominence` (float)
-  - Minimum peak prominence (mV) for population spike detection.
-  - Example: `0.2`
-- `threshold` (float)
-  - Slope threshold (mV/ms) for fallback curvature-based detection.
-  - Example: `0.05`
+### EPSPFeature
+Key params:
+- `method`: `"peak"` or `"template"`
+- `window_ms`: local EPSP snippet window
+- `search_window_ms`: detection region
+- `fit_distance`: half-width of the linear slope fit
+- `height`: peak-mode negative slope threshold in mV/ms
+- `template_score_threshold`: optional acceptance threshold in template mode
 
 Outputs:
-- `ps_amp`: population spike amplitude (mV)
-- `ps_s`, `ps_v`: time/voltage at PS peak
+- `epsp_s`, `epsp_v`
+- `slope_mid_s`, `slope_mid_v`
+- `epsp_amp`
+- `epsp_slope`
+- `epsp_r2`
+- `epsp_to_fv`
 
-Notes:
-- Requires EPSPFeature results.
+### PopSpikeFeature
+Key params:
+- `method`: `"peak"` or `"template"`
+- `search_window_ms`: detection region for both modes
+- `window_ms`: local template/snippet window in template mode
+- `height`: peak-mode population spike trough magnitude in mV. For a negative-going spike, use a positive value such as `1.5`.
+- `template_score_threshold`: optional acceptance threshold in template mode
 
-## Smoothing
-Smoothing is controlled via `SmoothingConfig`:
-- `method`: `none`, `moving_average`, `savgol`, or `butter_lowpass`
-- `window_size`, `polyorder`: for `moving_average`/`savgol`
-- `cutoff`, `order`: for `butter_lowpass`
-
-Behavior:
-- `global_smoothing` sets the default for all features and plots.
-- A plot can override smoothing by specifying `VizConfig.smoothing`.
+Outputs:
+- `ps_amp`
+- `ps_s`
+- `ps_v`
 
 ## Transforms
-Transforms are configured by name with params via `TransformConfig`:
-- `baseline_correction`:
-  - `baseline_window_ms` (tuple[float, float])
-- `crop_stim_artifact`:
-  - `window_ms` (tuple[float, float])
-- `template_subtract_stim_artifact`:
-  - `window_ms` (tuple[float, float])
-- `average_sweeps`: no params
+Current transform names:
+- `baseline_correction`
+- `crop_stim_artifact`
+- `template_subtract_stim_artifact`
+- `average_sweeps`
 
-Order matters. Recommended:
-1) `baseline_correction`
-2) `crop_stim_artifact` or `template_subtract_stim_artifact`
-3) `average_sweeps`
+Recommended order:
+1. `baseline_correction`
+2. `crop_stim_artifact` or `template_subtract_stim_artifact`
+3. `average_sweeps`
 
 ## Plots
-Available plot names (via `VizConfig.name`):
-- `sweep`: averaged sweeps
-- `derivative`: sweeps + derivative
-- `annotated`: sweeps with feature markers
-- `input_output`: plots synaptic strength (fEPSP slope vs fiber volley amplitude), presynaptic excitability (fiber volley amplitude vs stimulus intensity), and postsynaptic responsiveness (fEPSP slope vs stimulus intensity).
+Current plot names:
+- `sweep`
+- `derivative`
+- `annotated`
+- `template`
+- `input_output`
 
-Plot output naming uses the input file stem: `{stem}_{plot}.png`.
+The `template` plot shows:
+- the full signal with matched regions highlighted
+- the local template fit in actual units
+- the correlation profile across the allowed search window
 
-## Results export
-Each input file writes one workbook:
-- `{stem}_results.xlsx`
-- Sheets: `tidy`, `averaged`, `result_*`, `metadata`, `pipeline_config`
-
-## Example config snippet
+## Example
 ```python
 PipelineConfig(
     io=IOConfig(
-        input_paths=["/path/to/recording.abf"],
-        output_path="/path/to/output",
+        template_files=["/path/to/template.abf"],
+        test_files=["/path/to/test.abf"],
+        output_path="out/",
         repnum=3,
         stim_intensities=[25, 50, 75, 100, 150, 200],
-        metadata={"experimenter": "name"},
         write_results=True,
         write_plots=True,
         render_plots=False,
     ),
     transforms=[
         TransformConfig(name="baseline_correction", params={"baseline_window_ms": (0.0, 0.1)}),
-        TransformConfig(name="crop_stim_artifact", params={"window_ms": (0.0, 1.25)}),
+        TransformConfig(name="template_subtract_stim_artifact", params={"window_ms": (0.0, 2.25)}),
         TransformConfig(name="average_sweeps"),
     ],
     features=[
-        FeatureConfig(name="fiber_volley", params={"window_ms": (0.0, 1.5)}),
-        FeatureConfig(name="epsp", params={"window_ms": (1.5, 5.0), "fit_distance": 4}),
-        FeatureConfig(name="pop_spike", params={"lag_ms": 3.0, "prominence": 0.2, "threshold": 0.05}),
+        FeatureConfig(
+            name="fiber_volley",
+            params={
+                "method": "template",
+                "window_ms": (1.5, 3.0),
+                "search_window_ms": (1.0, 3.2),
+                "template_score_threshold": 0.8,
+            },
+        ),
+        FeatureConfig(
+            name="epsp",
+            params={
+                "method": "template",
+                "window_ms": (2.5, 4.0),
+                "search_window_ms": (1.5, 6.0),
+                "fit_distance": 4,
+                "template_score_threshold": 0.8,
+            },
+        ),
+        FeatureConfig(
+            name="pop_spike",
+            params={
+                "method": "peak",
+                "search_window_ms": (4.0, 8.0),
+                "height": 1.5,
+            },
+        ),
     ],
-    plots=[VizConfig(name="sweep")],
-    global_smoothing=SmoothingConfig(method="savgol", window_size=21, polyorder=3),
+    plots=[VizConfig(name="template")],
 )
 ```

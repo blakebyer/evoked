@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from epspkit.core.context import RecordingContext
+from epspkit.transforms.template import build_template, project_template, window_to_indices
 
 def crop_stim_artifact(
     context: RecordingContext,
@@ -24,15 +25,12 @@ def crop_stim_artifact(
         Tidy DataFrame with stimulation artifacts removed.
     """
     tidy_df = context.tidy
-    t0, t1 = [v / 1000.0 for v in window_ms]
-
     def crop_group(g: pd.DataFrame) -> pd.DataFrame:
         g = g.sort_values("time")
         x = g["time"].to_numpy()
 
         # time-based indices (robust to tiny dt rounding)
-        start_idx = int(np.searchsorted(x, t0))
-        stop_idx = int(np.searchsorted(x, t1))
+        start_idx, stop_idx = window_to_indices(x, window_ms)
 
         cropped = pd.concat([g.iloc[:start_idx], g.iloc[stop_idx:]], ignore_index=True)
 
@@ -63,8 +61,6 @@ def template_subtract_stim_artifact(
         Tidy DataFrame with stimulation artifacts removed.
     """
     tidy_df = context.tidy
-    t0, t1 = [v / 1000.0 for v in window_ms]
-
     def subtract_template(g_int: pd.DataFrame) -> pd.DataFrame:
         # g_int = all sweeps for one stim_intensity
         g_int = g_int.sort_values(["abf_sweep", "time"]).copy()
@@ -80,12 +76,8 @@ def template_subtract_stim_artifact(
         t = template_df["time"].to_numpy()
         T = template_df["voltage"].to_numpy()
 
-        start_idx = np.searchsorted(t, t0)
-        stop_idx  = np.searchsorted(t, t1)
-
-        denom = np.dot(T[start_idx:stop_idx], T[start_idx:stop_idx])
-        if denom <= 1e-20:
-            return g_int
+        start_idx, stop_idx = window_to_indices(t, window_ms)
+        template, _ = build_template(t, T, window_ms)
 
         out = []
         for sw, g in g_int.groupby("abf_sweep", sort=False):
@@ -98,10 +90,12 @@ def template_subtract_stim_artifact(
             if not np.allclose(x, t):
                 raise ValueError("Time grid mismatch between sweep and template")
 
-            num = np.dot(y[start_idx:stop_idx], T[start_idx:stop_idx])
-            a = num / denom
+            a = project_template(y[start_idx:stop_idx], template)
+            if not np.isfinite(a):
+                out.append(g)
+                continue
 
-            y[start_idx:stop_idx] -= a * T[start_idx:stop_idx]
+            y[start_idx:stop_idx] -= a * template
             g["voltage"] = y
             out.append(g)
 

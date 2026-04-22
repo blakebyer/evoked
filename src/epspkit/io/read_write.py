@@ -3,6 +3,7 @@ import pandas as pd
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from epspkit.core.context import RecordingContext
+import warnings
 
 # Add other load_*_to_context functions as needed for other filetypes
 
