@@ -53,7 +53,7 @@ class IOConfig:
     """
     I/O and basic acquisition configuration for a pipeline run.
     """
-    input_paths: Sequence[str] = field(default_factory=list)
+    input_files: Sequence[str] = field(default_factory=list)
     template_files: Sequence[str] = field(default_factory=list)
     test_files: Sequence[str] = field(default_factory=list)
     output_path: Path | None = None

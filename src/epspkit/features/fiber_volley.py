@@ -6,8 +6,8 @@ from __future__ import annotations
 from epspkit.features.base import Feature
 from epspkit.core.context import RecordingContext
 from epspkit.core.config import FeatureConfig, SmoothingConfig
-from epspkit.core import math as emath
-from epspkit.transforms.template import build_template, match_template, window_to_indices
+from epspkit.core.math import gradient, find_peaks, window_to_indices
+from epspkit.transforms.template import build_template, match_template
 import pandas as pd
 import numpy as np
 
@@ -15,12 +15,12 @@ import numpy as np
 class FiberVolleyFeature(Feature):
     """Detect fiber volley extrema and amplitude for each stimulus intensity."""
 
-    SUPPORTED_METHODS = {"peak", "template"}
+    SUPPORTED_METHODS = {"derivative", "template"}
 
     def __init__(self, config: FeatureConfig, effective_smoothing: SmoothingConfig | None = None):
         super().__init__(config, effective_smoothing)
         params = self.config.params
-        self.method = self.resolve_method(default="peak", allowed=self.SUPPORTED_METHODS)
+        self.method = self.resolve_method(default="derivative", allowed=self.SUPPORTED_METHODS)
         self.window_ms = params.get("window_ms")  # ms
         if self.window_ms is None:
             raise ValueError("window_ms parameter must be specified for FiberVolleyFeature.")
@@ -28,12 +28,9 @@ class FiberVolleyFeature(Feature):
         if self.search_window_ms[1] <= self.search_window_ms[0]:
             raise ValueError("search_window_ms must have stop > start for FiberVolleyFeature.")
         self.height = params.get("height")  # mV
-        if self.method == "peak" and self.height is None:
+        if self.method == "derivative" and self.height is None:
             raise ValueError("height parameter must be specified for FiberVolleyFeature.")
-        self.template_r2_threshold = params.get(
-            "template_r2_threshold",
-            params.get("template_score_threshold"),
-        )
+        self.score_threshold = params.get("score_threshold")
 
     def run(self, context: RecordingContext) -> RecordingContext:
         fs = context.fs  # Hz
@@ -60,17 +57,34 @@ class FiberVolleyFeature(Feature):
             template_scale = np.nan
             template_r2 = np.nan
 
-            if self.method == "peak":
+            if self.method == "derivative":
                 y_w = y[start_idx:stop_idx]
+                x_w = x[start_idx:stop_idx]
                 if y_w.size:
-                    neg_peaks, neg_props = emath.find_peaks(-y_w, height=self.height)
+                    neg_peaks, neg_props = find_peaks(-y_w, height=self.height)
                     if neg_peaks.size:
                         if "peak_heights" in neg_props:
-                            fv_min_rel = int(neg_peaks[np.argmax(neg_props["peak_heights"])])
+                            fv_rel = int(neg_peaks[np.argmax(neg_props["peak_heights"])])
                         else:
-                            fv_min_rel = int(neg_peaks[np.argmin(y_w[neg_peaks])])
-                        fv_idx = start_idx + fv_min_rel
-                        fv_amp = abs(float(y[fv_idx]))
+                            fv_rel = int(neg_peaks[np.argmin(y_w[neg_peaks])])
+                    else: # no peaks, try positive curvature
+                        dy_w = gradient(y_w, x_w)
+                        ddy_w = gradient(dy_w, x_w)
+                        curvature = ddy_w / (1 + (dy_w)**2)**1.5 
+                        curv_norm = curvature / (np.std(curvature) + 1e-8)
+
+                        valid = (curv_norm > 1) & (dy_w < 0)
+                        # print("fv curv_norm min/max:", np.min(curv_norm), np.max(curv_norm))
+                        # print("fv dy min/max:", np.min(dy_w), np.max(dy_w))
+                        # print("fv n valid:", np.sum((curv_norm < -3) & (dy_w < 0)))
+
+                        if np.any(valid):
+                            candidates = np.where(valid)[0]
+                            fv_rel = int(candidates[np.argmax(curv_norm[candidates])])
+                        # else:
+                        #     fv_rel = int(np.argmax(curv_norm))
+                            fv_idx = start_idx + fv_rel
+                    #fv_amp = abs(float(y[fv_idx]))
             else:
                 if template is None:
                     template_trace = self.config.params.get("template_trace")
@@ -94,20 +108,20 @@ class FiberVolleyFeature(Feature):
                     template,
                     center_idx=template_center_idx,
                 )
-                threshold = self.template_r2_threshold
+                threshold = self.score_threshold
                 if fv_idx is None or (
-                    threshold is not None and template_r2 < float(threshold)
+                    threshold is not None and template_score < float(threshold)
                 ):
                     fv_idx = None
 
             if fv_idx is not None:
                 fv_s = float(x[fv_idx])
                 fv_v = float(y[fv_idx])
-                fv_amp = abs(fv_v)
+                # no fv_amp in template mode, it is misleading
 
             results.append({
                 "stim_intensity": stim,
-                "fv_amp": float(fv_amp) if np.isfinite(fv_amp) else np.nan,
+                "fv_amp": fv_amp,
                 "fv_s": fv_s,
                 "fv_v": fv_v,
                 "template_score": float(template_score) if np.isfinite(template_score) else np.nan,

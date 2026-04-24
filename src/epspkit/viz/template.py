@@ -8,10 +8,9 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
-from epspkit.core import math as emath
+from epspkit.core.math import gradient, window_to_indices
 from epspkit.core.config import SmoothingConfig, VizConfig
 from epspkit.core.context import RecordingContext
-from epspkit.transforms.template import window_to_indices
 from epspkit.viz.base import Plot
 
 
@@ -63,7 +62,7 @@ class TemplatePlot(Plot):
 
         feature_cfgs: dict[str, dict] = {}
         for feature_cfg in pipeline_cfg.features:
-            method = str(feature_cfg.params.get("method", "peak")).lower()
+            method = str(feature_cfg.params.get("method", "derivative")).lower()
             if method != "template":
                 continue
             if feature_cfg.name not in self.FEATURE_SPECS:
@@ -189,7 +188,7 @@ class TemplatePlot(Plot):
 
                     x = g["time"].to_numpy()
                     y = self.apply_smoothing(g["mean"].to_numpy(), fs=fs)
-                    dy = emath.gradient(y, x)
+                    dy = gradient(y, x)
                     source_trace = y if spec["source"] == "voltage" else dy
 
                     rows = None

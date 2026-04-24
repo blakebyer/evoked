@@ -10,7 +10,7 @@ Typical order:
 
 ## IOConfig
 Use one of these input patterns:
-- `input_paths`: analyze those files directly.
+- `input_files`: analyze those files directly.
 - `template_files` + `test_files`: build templates from `template_files`, then analyze only `test_files`.
 
 Common fields:
@@ -47,11 +47,11 @@ Signal space:
 
 ### FiberVolleyFeature
 Key params:
-- `method`: `"peak"` or `"template"`
+- `method`: `"derivative"` or `"template"`
 - `window_ms`: local FV window
 - `search_window_ms`: detection region
-- `height`: peak-mode trough magnitude threshold in mV
-- `template_score_threshold`: optional acceptance threshold in template mode
+- `height`: derivative-mode threshold in mV.
+- `score_threshold`: optional template-score acceptance threshold in template mode
 
 Outputs:
 - `fv_amp`
@@ -60,12 +60,11 @@ Outputs:
 
 ### EPSPFeature
 Key params:
-- `method`: `"peak"` or `"template"`
+- `method`: `"derivative"` or `"template"`
 - `window_ms`: local EPSP snippet window
 - `search_window_ms`: detection region
 - `fit_distance`: half-width of the linear slope fit
-- `height`: peak-mode negative slope threshold in mV/ms
-- `template_score_threshold`: optional acceptance threshold in template mode
+- `score_threshold`: optional template-score acceptance threshold in template mode
 
 Outputs:
 - `epsp_s`, `epsp_v`
@@ -77,11 +76,11 @@ Outputs:
 
 ### PopSpikeFeature
 Key params:
-- `method`: `"peak"` or `"template"`
+- `method`: `"derivative"` or `"template"`
 - `search_window_ms`: detection region for both modes
 - `window_ms`: local template/snippet window in template mode
-- `height`: peak-mode population spike trough magnitude in mV. For a negative-going spike, use a positive value such as `1.5`.
-- `template_score_threshold`: optional acceptance threshold in template mode
+- `height`: derivative-mode population spike peak magnitude in mV.
+- `score_threshold`: optional template-score acceptance threshold in template mode
 
 Outputs:
 - `ps_amp`
@@ -138,7 +137,7 @@ PipelineConfig(
                 "method": "template",
                 "window_ms": (1.5, 3.0),
                 "search_window_ms": (1.0, 3.2),
-                "template_score_threshold": 0.8,
+                "score_threshold": 0.8,
             },
         ),
         FeatureConfig(
@@ -148,13 +147,13 @@ PipelineConfig(
                 "window_ms": (2.5, 4.0),
                 "search_window_ms": (1.5, 6.0),
                 "fit_distance": 4,
-                "template_score_threshold": 0.8,
+                "score_threshold": 0.8,
             },
         ),
         FeatureConfig(
             name="pop_spike",
             params={
-                "method": "peak",
+                "method": "derivative",
                 "search_window_ms": (4.0, 8.0),
                 "height": 1.5,
             },

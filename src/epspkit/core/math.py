@@ -56,3 +56,10 @@ def to_samples(time_ms: float, fs: float):
 
 def to_ms(samples: int, fs: float):
     return (samples / fs) * 1000.0
+
+def window_to_indices(
+    x: np.ndarray,
+    window_ms: tuple[float, float],
+) -> tuple[int, int]:
+    t0, t1 = [value / 1000.0 for value in window_ms]
+    return int(np.searchsorted(x, t0)), int(np.searchsorted(x, t1))

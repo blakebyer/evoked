@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
-from epspkit.core import math as emath
+from epspkit.core.math import gradient
 from epspkit.core.context import RecordingContext
 from epspkit.viz.template import TemplatePlot
 
@@ -56,7 +56,7 @@ class TemplateSimplePlot(TemplatePlot):
 
                     x = g["time"].to_numpy()
                     y = self.apply_smoothing(g["mean"].to_numpy(), fs=fs)
-                    dy = emath.gradient(y, x)
+                    dy = gradient(y, x)
 
                     ax.plot(x, y, color="0.35", linewidth=1.8, label="Signal")
 

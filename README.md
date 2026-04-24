@@ -35,7 +35,7 @@ from epspkit.pipeline.api import run_pipeline
 
 pipeline_config = PipelineConfig(
     io=IOConfig(
-        input_paths=["/path/to/recording.abf"],
+        input_files=["/path/to/recording.abf"],
         output_path="/path/to/output/results.xlsx",
         plot_pdf_path="/path/to/output/run_plots.pdf",
         repnum=3,

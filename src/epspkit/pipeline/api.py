@@ -29,7 +29,7 @@ from epspkit.transforms.stim_artifact import (
     crop_stim_artifact,
     template_subtract_stim_artifact,
 )
-from epspkit.transforms.template import average_templates, build_feature_template
+from epspkit.transforms.template import average_templates, build_template
 from epspkit.transforms.template import capture_template_window
 from epspkit.viz.annotated import AnnotatedPlot
 from epspkit.viz.derivative import DerivativePlot
@@ -295,13 +295,13 @@ def run_context(
 
 
 def _uses_template_method(feature_cfg: FeatureConfig) -> bool:
-    method = str(feature_cfg.params.get("method", "peak")).lower()
+    method = str(feature_cfg.params.get("method", "derivative")).lower()
     return method == "template"
 
 
 def _resolve_test_paths(pipeline_config: PipelineConfig) -> list[str]:
     io_cfg = pipeline_config.io
-    return list(io_cfg.test_files or io_cfg.input_paths)
+    return list(io_cfg.test_files or io_cfg.input_files)
 
 
 def _load_context(path: str, pipeline_config: PipelineConfig) -> RecordingContext:
@@ -355,12 +355,12 @@ def _build_template_for_feature(
                 fs=context.fs,
             )
 
-            snippet, resolved_center = build_feature_template(
-                feature_cfg.name,
+            snippet, resolved_center = build_template(
                 x,
                 y,
                 window_ms,
                 center_idx=center_idx,
+                feature_name=feature_cfg.name,
             )
             if center_idx is None:
                 center_idx = resolved_center
@@ -412,7 +412,7 @@ def run_pipeline(
     test_paths = _resolve_test_paths(pipeline_config)
     if not test_paths:
         raise ValueError(
-            "PipelineConfig.io.test_files or input_paths is required."
+            "PipelineConfig.io.test_files or input_files is required."
         )
     if not pipeline_config.io.stim_intensities:
         raise ValueError("PipelineConfig.io.stim_intensities is required.")

@@ -5,25 +5,34 @@ from collections.abc import Sequence
 import numpy as np
 
 from epspkit.core.context import RecordingContext
+from epspkit.core.math import (
+    window_to_indices,
+    gradient,
+)
 from epspkit.features.base import apply_smoothing
-
-
-def window_to_indices(
-    x: np.ndarray,
-    window_ms: tuple[float, float],
-) -> tuple[int, int]:
-    t0, t1 = [value / 1000.0 for value in window_ms]
-    return int(np.searchsorted(x, t0)), int(np.searchsorted(x, t1))
-
 
 def build_template(
     x: np.ndarray,
     y: np.ndarray,
     window_ms: tuple[float, float],
     center_idx: int | None = None,
+    feature_name: str | None = None,
 ) -> tuple[np.ndarray, int]:
+    signal = np.asarray(y, dtype=float).ravel()
+
+    if feature_name is not None:
+        feature_key = str(feature_name).lower()
+        if feature_key == "epsp":
+            signal = gradient(signal, x)
+        elif feature_key in {"fiber_volley", "pop_spike"}:
+            pass
+        else:
+            raise ValueError(
+                f"Feature '{feature_name}' does not define a template signal representation."
+            )
+
     start_idx, stop_idx = window_to_indices(x, window_ms)
-    template = np.asarray(y[start_idx:stop_idx], dtype=float).ravel().copy()
+    template = np.asarray(signal[start_idx:stop_idx], dtype=float).ravel().copy()
     if template.size < 3:
         raise ValueError("Template window must contain at least 3 samples.")
 
@@ -39,46 +48,45 @@ def build_template(
     return template, center_idx
 
 
-def feature_template_signal(
-    feature_name: str,
-    x: np.ndarray,
-    y: np.ndarray,
-) -> np.ndarray:
-    feature_key = str(feature_name).lower()
-    signal = np.asarray(y, dtype=float).ravel()
-
-    if feature_key == "epsp":
-        return np.gradient(signal, x)
-    if feature_key in {"fiber_volley", "pop_spike"}:
-        return signal
-
-    raise ValueError(
-        f"Feature '{feature_name}' does not define a template signal representation."
-    )
-
-
-def build_feature_template(
-    feature_name: str,
-    x: np.ndarray,
-    y: np.ndarray,
-    window_ms: tuple[float, float],
-    center_idx: int | None = None,
-) -> tuple[np.ndarray, int]:
-    template_signal = feature_template_signal(feature_name, x, y)
-    return build_template(x, template_signal, window_ms, center_idx=center_idx)
+def center_signal(signal: np.ndarray) -> np.ndarray:
+    signal_arr = np.asarray(signal, dtype=float).ravel()
+    return signal_arr - float(np.mean(signal_arr))
 
 
 def project_template(signal: np.ndarray, template: np.ndarray) -> float:
-    signal_arr = np.asarray(signal, dtype=float).ravel()
-    template_arr = np.asarray(template, dtype=float).ravel()
-    if signal_arr.size != template_arr.size:
+    """
+    Return the least-squares scale for the centered model
+        signal_c ≈ scale * template_c
+    where *_c denotes mean-centered vectors.
+    """
+    signal_c = center_signal(signal)
+    template_c = center_signal(template)
+    if signal_c.size != template_c.size:
         raise ValueError("Signal and template must have the same length.")
 
-    denom = float(np.dot(template_arr, template_arr))
+    denom = float(np.dot(template_c, template_c))
     if denom <= 1e-20:
         return np.nan
 
-    return float(np.dot(signal_arr, template_arr) / denom)
+    return float(np.dot(signal_c, template_c) / denom)
+
+
+def pearson_corr(snippet: np.ndarray, template: np.ndarray) -> float:
+    """
+    Pearson correlation between snippet and template.
+    This is cosine similarity of the centered vectors.
+    """
+    snippet_c = center_signal(snippet)
+    template_c = center_signal(template)
+    if snippet_c.size != template_c.size or snippet_c.size < 2:
+        return np.nan
+
+    snippet_norm = float(np.linalg.norm(snippet_c))
+    template_norm = float(np.linalg.norm(template_c))
+    if snippet_norm <= 1e-20 or template_norm <= 1e-20:
+        return np.nan
+
+    return float(np.dot(snippet_c, template_c) / (snippet_norm * template_norm))
 
 
 def template_fit_r2(
@@ -86,14 +94,22 @@ def template_fit_r2(
     template: np.ndarray,
     scale: float,
 ) -> float:
-    snippet_arr = np.asarray(snippet, dtype=float).ravel()
-    template_arr = np.asarray(template, dtype=float).ravel()
-    if snippet_arr.size != template_arr.size or snippet_arr.size < 2:
+    """
+    R^2 for the centered fit
+        snippet_c ≈ scale * template_c.
+
+    This is equivalent to the ordinary linear-model R^2 for
+        snippet ≈ scale * template + intercept
+    but computed entirely in centered coordinates.
+    """
+    snippet_c = center_signal(snippet)
+    template_c = center_signal(template)
+    if snippet_c.size != template_c.size or snippet_c.size < 2:
         return np.nan
 
-    model = float(scale) * template_arr
-    ss_res = float(np.sum((snippet_arr - model) ** 2))
-    ss_tot = float(np.sum((snippet_arr - np.mean(snippet_arr)) ** 2))
+    model_c = float(scale) * template_c
+    ss_res = float(np.sum((snippet_c - model_c) ** 2))
+    ss_tot = float(np.sum(snippet_c ** 2))
     if ss_tot <= 1e-20:
         return np.nan
     return float(1.0 - ss_res / ss_tot)
@@ -106,6 +122,21 @@ def match_template(
     template: np.ndarray,
     center_idx: int | None = None,
 ) -> tuple[int | None, float, float, float]:
+    """
+    Slide the template across the allowed region and, at each candidate center,
+    fit the centered snippet to the centered template with a single scale value.
+
+    Returns
+    -------
+    best_idx : int | None
+        Best center index in the signal.
+    best_scale : float
+        Least-squares scale for the centered fit.
+    best_score : float
+        Pearson correlation at the best alignment.
+    best_r2 : float
+        R^2 of the centered fit at the best alignment.
+    """
     signal_arr = np.asarray(signal, dtype=float).ravel()
     template_arr = np.asarray(template, dtype=float).ravel()
     if template_arr.size < 3:
@@ -135,8 +166,8 @@ def match_template(
     if last_center < first_center:
         return None, np.nan, np.nan, np.nan
 
-    template_norm = float(np.linalg.norm(template_arr))
-    template_energy = float(np.dot(template_arr, template_arr))
+    template_c = center_signal(template_arr)
+    template_energy = float(np.dot(template_c, template_c))
     if template_energy <= 1e-20:
         return None, np.nan, np.nan, np.nan
 
@@ -147,14 +178,20 @@ def match_template(
 
     for candidate_idx in range(first_center, last_center + 1):
         snippet = signal_arr[candidate_idx - left:candidate_idx + right + 1]
-        snippet_norm = float(np.linalg.norm(snippet))
-        if snippet_norm <= 1e-20:
+        snippet_c = center_signal(snippet)
+        snippet_energy = float(np.dot(snippet_c, snippet_c))
+        if snippet_energy <= 1e-20:
             continue
 
-        numerator = float(np.dot(snippet, template_arr))
-        scale = numerator / template_energy
-        score = numerator / (snippet_norm * template_norm)
+        scale = float(np.dot(snippet_c, template_c) / template_energy)
+        if scale <= 0: # polarity should not flip
+            continue
+        score = pearson_corr(snippet, template_arr)
         r2 = template_fit_r2(snippet, template_arr, scale)
+
+        if np.isnan(score):
+            continue
+
         if score > best_score:
             best_idx = candidate_idx
             best_scale = scale
@@ -260,12 +297,12 @@ def capture_template_window(
             fs=context.fs,
         )
 
-        snippet, resolved = build_feature_template(
-            feature_name,
+        snippet, resolved = build_template(
             x,
             y,
             window_ms,
             center_idx=resolved_center,
+            feature_name=feature_name,
         )
         if resolved_center is None:
             resolved_center = resolved

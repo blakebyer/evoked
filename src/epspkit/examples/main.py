@@ -47,7 +47,7 @@ def main() -> None:
                 params={
                     "method": "template",
                     "window_ms": (0.0, 1.5),
-                    "template_score_threshold": 0.5,
+                    "score_threshold": 0.5,
                 },
             ),
             FeatureConfig(
@@ -56,13 +56,13 @@ def main() -> None:
                     "method": "template",
                     "window_ms": (1.5, 5.0),
                     "fit_distance": 4,
-                    "template_score_threshold": 0.5,
+                    "score_threshold": 0.5,
                 },
             ),
             FeatureConfig(
                 name="pop_spike",
                 params={
-                    "method": "peak",
+                    "method": "derivative",
                     "search_window_ms": (4.0, 8.0),
                     "height": 0.2,
                 },

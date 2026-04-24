@@ -9,7 +9,7 @@ from matplotlib.ticker import FuncFormatter
 from epspkit.core.config import SmoothingConfig, VizConfig
 from epspkit.core.context import RecordingContext
 from epspkit.viz.base import Plot
-from epspkit.core import math as emath
+from epspkit.core.math import gradient
 
 class DerivativePlot(Plot):
     """
@@ -51,7 +51,7 @@ class DerivativePlot(Plot):
                     y = g["mean"].to_numpy()
                     y = self.apply_smoothing(y, fs=fs)
 
-                    dy = emath.gradient(y, x)   # mV/s
+                    dy = gradient(y, x)   # mV/s
                     dy = dy / 1000.0                # convert to mV/ms (if x is seconds)
 
                     ax1.plot(x, y, label=f"{stim} µA", color=color)

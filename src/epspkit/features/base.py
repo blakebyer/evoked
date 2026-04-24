@@ -7,8 +7,11 @@ import numpy as np
 
 from epspkit.core.config import FeatureConfig, SmoothingConfig
 from epspkit.core.context import RecordingContext
-from epspkit.core import math as emath
-
+from epspkit.core.math import (
+    moving_average,
+    savgol,
+    butter_lowpass
+)
 
 def apply_smoothing(
     y,
@@ -26,7 +29,7 @@ def apply_smoothing(
     y_arr = np.asarray(y)
 
     if cfg.method == "moving_average":
-        return emath.moving_average(y_arr, cfg.window_size)
+        return moving_average(y_arr, cfg.window_size)
 
     if cfg.method == "savgol":
         window = cfg.window_size
@@ -40,12 +43,12 @@ def apply_smoothing(
                 f"(got window_size={window}, polyorder={poly})."
             )
 
-        return emath.savgol(y_arr, window, poly)
+        return savgol(y_arr, window, poly)
 
     if cfg.method == "butter_lowpass":
         if fs is None:
             raise ValueError("Butterworth smoothing requires a sampling rate fs.")
-        return emath.butter_lowpass(y_arr, cfg.cutoff, fs, order=cfg.order)
+        return butter_lowpass(y_arr, cfg.cutoff, fs, order=cfg.order)
 
     raise ValueError(f"Unknown smoothing method: {cfg.method}")
 

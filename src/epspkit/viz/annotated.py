@@ -402,14 +402,14 @@ class AnnotatedPlot(Plot):
                                 },
                                     zorder=4,
                                 )
-                                ax.annotate(
-                                    "PS amplitude",
-                                    xy=(ps_s, 0.5 * (ps_v + v_base)),
-                                    xytext=(6, 0),
-                                    textcoords="offset points",
-                                    color="black",
-                                    ha="left",
-                                    va="center",
-                                    zorder=7,
-                                    bbox=label_box.copy(),
-                                )
+                                # ax.annotate(
+                                #     "PS amplitude",
+                                #     xy=(ps_s, 0.5 * (ps_v + v_base)),
+                                #     xytext=(6, 0),
+                                #     textcoords="offset points",
+                                #     color="black",
+                                #     ha="left",
+                                #     va="center",
+                                #     zorder=7,
+                                #     bbox=label_box.copy(),
+                                # )

@@ -6,8 +6,12 @@ from __future__ import annotations
 from epspkit.features.base import Feature
 from epspkit.core.context import RecordingContext
 from epspkit.core.config import FeatureConfig, SmoothingConfig
-from epspkit.core import math as emath
-from epspkit.transforms.template import build_template, match_template, window_to_indices
+from epspkit.core.math import (
+    gradient,
+    linear_fit,
+    window_to_indices,
+)
+from epspkit.transforms.template import build_template, match_template
 import pandas as pd
 import numpy as np
 
@@ -16,12 +20,12 @@ class EPSPFeature(Feature):
     Computes EPSP minima and slopes from averaged traces.
     """
 
-    SUPPORTED_METHODS = {"peak", "template"}
+    SUPPORTED_METHODS = {"derivative", "template"}
 
     def __init__(self, config: FeatureConfig, effective_smoothing: SmoothingConfig | None = None):
         super().__init__(config, effective_smoothing)
         params = self.config.params
-        self.method = self.resolve_method(default="peak", allowed=self.SUPPORTED_METHODS)
+        self.method = self.resolve_method(default="derivative", allowed=self.SUPPORTED_METHODS)
         self.window_ms = params.get("window_ms")  # ms
         if self.window_ms is None:
             raise ValueError("window_ms parameter must be specified for EPSPFeature.")
@@ -30,17 +34,11 @@ class EPSPFeature(Feature):
             raise ValueError("search_window_ms parameter must be specified for EPSPFeature.")
         if self.search_window_ms[1] <= self.search_window_ms[0]:
             raise ValueError("search_window_ms must have stop > start for EPSPFeature.")
-        self.height = params.get("height")  # mV/ms, applied to the negative slope peak
-        if self.method == "peak" and self.height is None:
-            raise ValueError("height parameter must be specified for EPSPFeature in peak mode.")
         fit_distance = params.get("fit_distance")
         if fit_distance is None:
             raise ValueError("fit_distance parameter must be specified for EPSPFeature.")
         self.fit_distance = int(fit_distance)  # points
-        self.template_r2_threshold = params.get(
-            "template_r2_threshold",
-            params.get("template_score_threshold"),
-        )
+        self.score_threshold = params.get("score_threshold")
 
     def run(self, context: RecordingContext) -> RecordingContext:
         """
@@ -82,7 +80,7 @@ class EPSPFeature(Feature):
                         "'template' or 'template_trace'."
                     )
                 template_time = np.asarray(self.config.params.get("template_time", x), dtype=float)
-                template_source = emath.gradient(
+                template_source = gradient(
                     np.asarray(template_trace, dtype=float),
                     template_time,
                 )
@@ -99,41 +97,14 @@ class EPSPFeature(Feature):
             template_score = np.nan
             template_r2 = np.nan
             start_idx, stop_idx = window_to_indices(x, self.search_window_ms)
-            dy_full = emath.gradient(y, x)
+            dy_full = gradient(y, x)
 
             if stop_idx > start_idx:
-                if self.method == "peak":
+                if self.method == "derivative":
                     dy_w = dy_full[start_idx:stop_idx]
-                    d2_w = emath.gradient(dy_w, x[start_idx:stop_idx])
                     if dy_w.size:
                         dy_min_rel = int(np.argmin(dy_w))
-                        onset_rel = 0
-                        if d2_w.size:
-                            d2_prefix = d2_w[:dy_min_rel + 1]
-                            d2_peaks, _ = emath.find_peaks(d2_prefix)
-                            if d2_peaks.size:
-                                positive_peaks = d2_peaks[d2_prefix[d2_peaks] > 0]
-                                if positive_peaks.size:
-                                    onset_rel = int(positive_peaks[-1])
-                                else:
-                                    onset_rel = int(d2_peaks[np.argmax(d2_prefix[d2_peaks])])
-                            else:
-                                onset_rel = int(np.argmax(d2_prefix))
-
-                        slope_tail = dy_w[onset_rel:]
-                        if slope_tail.size:
-                            neg_slope_peaks, neg_slope_props = emath.find_peaks(
-                                -slope_tail,
-                                height=float(self.height) * 1000.0,
-                            )
-                            if neg_slope_peaks.size:
-                                if "peak_heights" in neg_slope_props:
-                                    slope_rel = int(
-                                        neg_slope_peaks[np.argmax(neg_slope_props["peak_heights"])]
-                                    )
-                                else:
-                                    slope_rel = int(neg_slope_peaks[np.argmin(slope_tail[neg_slope_peaks])])
-                                slope_center_idx = start_idx + onset_rel + slope_rel
+                        slope_center_idx = start_idx + dy_min_rel
                 else:
                     slope_center_idx, template_scale, template_score, template_r2 = match_template(
                         dy_full,
@@ -142,9 +113,9 @@ class EPSPFeature(Feature):
                         template,
                         center_idx=template_center_idx,
                     )
-                    threshold = self.template_r2_threshold
+                    threshold = self.score_threshold
                     if slope_center_idx is None or (
-                        threshold is not None and template_r2 < float(threshold)
+                        threshold is not None and template_score < float(threshold)
                     ):
                         slope_center_idx = None
 
@@ -168,13 +139,13 @@ class EPSPFeature(Feature):
                 if i1 > i0:
                     t_win = x[i0:i1 + 1] - x[slope_center_idx]
                     v_win = y[i0:i1 + 1]
-                    fit_slope, _, epsp_r2 = emath.linear_fit(t_win, v_win)
+                    fit_slope, _, epsp_r2 = linear_fit(t_win, v_win)
                     fit_slope = float(abs(fit_slope) / 1000.0)
                     epsp_r2 = float(epsp_r2)
                     epsp_slope = fit_slope
 
             epsp_to_fv = np.nan
-            if np.isfinite(fv_amp) and fv_amp > 0 and np.isfinite(epsp_slope):
+            if np.isfinite(fv_amp) and fv_amp > 1e-6 and np.isfinite(epsp_slope):
                 epsp_to_fv = float(epsp_slope / fv_amp)
 
             results.append({

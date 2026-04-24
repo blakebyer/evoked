@@ -3,7 +3,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from epspkit.core.context import RecordingContext
-from epspkit.transforms.template import build_template, project_template, window_to_indices
+from epspkit.core.math import window_to_indices
+from epspkit.transforms.template import build_template, project_template
 
 def crop_stim_artifact(
     context: RecordingContext,
