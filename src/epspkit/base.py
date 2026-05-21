@@ -25,12 +25,12 @@ class IntermediateResult(pa.DataFrameModel):
     intensity: Series[int]
 
 class FitResult(pa.DataFrameModel):
-    intensity: Series[int]
-    lag: Series[float]
-    scale: Series[float]
-    stretch: Series[float]
-    corr: Series[float]
-    r2: Series[float]
+    intensity: Series[int] # stimulus intensity
+    lag: Series[float] # difference in ms from center of template to center of best fit
+    scale: Series[float] # vertical scale
+    stretch: Series[float] # horizontal stretch
+    corr: Series[float] # pearson corr
+    r2: Series[float] # r^2
 
 @dataclass
 class FeatureResult:
