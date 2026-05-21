@@ -14,23 +14,33 @@ def window_to_indices(
     return int(np.searchsorted(x, t0)), int(np.searchsorted(x, t1))
 
 class RecordingData(pa.DataFrameModel):
+    id: Series[str]
     time: Series[float]
     voltage: Series[float]
     intensity: Series[int]
     sweepNumber: Series[int]
 
 class IntermediateResult(pa.DataFrameModel):
+    id: Series[str]
     time: Series[float]
     voltage: Series[float]
     intensity: Series[int]
 
 class FitResult(pa.DataFrameModel):
+    id: Series[str]
     intensity: Series[int] # stimulus intensity
     lag: Series[float] # difference in ms from center of template to center of best fit
     scale: Series[float] # vertical scale
-    stretch: Series[float] # horizontal stretch
     corr: Series[float] # pearson corr
     r2: Series[float] # r^2
+
+@dataclass
+class PreprocessParams:
+    baseline_window: tuple[float, float]
+    artifact_window: tuple[float, float]
+    artifact: str
+    smoothing: str
+    smoothing_params: dict = field(default_factory=dict)
 
 @dataclass
 class FeatureResult:
@@ -40,4 +50,5 @@ class FeatureResult:
 
 @dataclass
 class RecordingResult:
+    preprocess_params: PreprocessParams
     results: dict[str, FeatureResult] = field(default_factory=dict)
