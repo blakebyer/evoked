@@ -52,3 +52,7 @@ class FeatureResult:
 class RecordingResult:
     preprocess_params: PreprocessParams
     results: dict[str, FeatureResult] = field(default_factory=dict)
+    def get(self, result_key: str) -> FeatureResult:
+        return self.results[result_key]
+    def add(self, result_key: str, feature_result: FeatureResult) -> None:
+        self.results[result_key] = feature_result

@@ -5,6 +5,7 @@ from pandera.typing import DataFrame
 import pandera as pa
 from pymatreader import read_mat
 import pandas as pd
+import numpy as np
 
 """
     Tabular data should look like:
@@ -37,8 +38,8 @@ def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> Da
         data.append(
             pd.DataFrame({
                 "id": id_value,
-                "time": abf.sweepX,             
-                "voltage": abf.sweepY,          
+                "time": np.asarray(abf.sweepX,dtype=np.float64),             
+                "voltage": np.asarray(abf.sweepY,dtype=np.float64),     
                 "intensity": stim_intensity, 
                 "sweepNumber": sweepNumber,      
             })
