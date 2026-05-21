@@ -20,8 +20,30 @@ import pandas as pd
 """
 
 @pa.check_types
-def load_abf(filename, intensities: list[int], repnum: int) -> DataFrame[RecordingData]:
-    return None
+def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> DataFrame[RecordingData]:
+    abf = pyabf.ABF(filename)
+    n_intensities = len(intensities)
+    n_sweeps = len(abf.sweepList)
+    expected = n_intensities * repnum
+    if n_sweeps != expected:
+        raise ValueError(f"{filename}: expected {expected} sweeps, got {n_sweeps}")
+    data = []
+    for sweep_i, sweepNumber in enumerate(abf.sweepList):
+        abf.setSweep(sweepNumber)
+
+        intensity_index = sweep_i // repnum
+        stim_intensity = intensities[intensity_index]
+
+        data.append(
+            pd.DataFrame({
+                "id": id_value,
+                "time": abf.sweepX,             
+                "voltage": abf.sweepY,          
+                "intensity": stim_intensity, 
+                "sweepNumber": sweepNumber,      
+            })
+        )
+    return pd.concat(data, ignore_index=True)
 
 @pa.check_types
 def load_mat(filename, table_name: str) -> DataFrame[RecordingData]:
@@ -42,22 +64,35 @@ def load_xlsx(filename) -> DataFrame[RecordingData]:
 
 @pa.check_types
 def load_bulk(
-    filenames: list[Path],
+    filenames: list[str],
     table_name: str | None = None,
     intensities: list[int] | None = None,
+    id_values: list[str] | None = None,
     repnum: int | None = None,
 ) -> DataFrame[RecordingData]:
 
     recordings = []
     seen_ids = set()
+    abf_i = 0
 
     for file in filenames:
+        file = Path(file)
         suffix = file.suffix.lower()
 
         if suffix == ".abf":
-            if intensities is None or repnum is None:
-                raise ValueError("ABF loading requires intensities and repnum.")
-            df = load_abf(file, intensities=intensities, repnum=repnum)
+            if any(var is None for var in (intensities, repnum, id_values)):
+                raise ValueError("ABF loading requires intensities, repnum, and id_values.")
+
+            if abf_i >= len(id_values):
+                raise ValueError("Not enough id_values provided for ABF files.")
+
+            df = load_abf(
+                file,
+                intensities=intensities,
+                id_value=id_values[abf_i],
+                repnum=repnum
+            )
+            abf_i += 1
 
         elif suffix == ".mat":
             if table_name is None:
