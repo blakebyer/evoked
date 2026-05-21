@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from epspkit.base import IntermediateResult, FitResult, window_to_indices
+from epspkit.base import IntermediateResult, FitResult, FeatureResult, RecordingResult, window_to_indices
 from pandera.typing import DataFrame
 
 def center_signal(signal: np.ndarray):
@@ -45,52 +45,70 @@ def estimate_corr(snippet: np.ndarray, template: np.ndarray) -> float:
 
     return float(np.dot(snippet_c, template_c) / (snippet_norm * template_norm))
 
-def build_template(x: np.ndarray, y: np.ndarray, template_window: tuple[float,float]):
-    signal = np.asarray(y).ravel()
-    start_idx, stop_idx = window_to_indices(x, template_window)
-    template = signal[start_idx:stop_idx]
-    if template.size < 3:
-        raise ValueError("Template window must contain at least 3 samples.")
-    center_idx = int(template.size // 2)
-    return template, center_idx
-
 def fit_template(
     intermediate: DataFrame[IntermediateResult],
-    template: np.ndarray,
+    template_window: tuple[float, float],
     search_window: tuple[float, float],
-    center_idx: int,
-    intensities: list[int] | None = None
-) -> DataFrame[FitResult]:
+    template_intensities: list[int],
+    slope_transform: bool = False,
+) -> FeatureResult:
 
-    if intensities is not None:
-        intermediate = intermediate[intermediate["intensity"].isin(intensities)].copy()
+    template_data = intermediate[
+        intermediate["intensity"].isin(template_intensities)
+    ]
 
-    template = np.asarray(template, dtype=float).ravel()
-    results = []
+    if template_data.empty:
+        raise ValueError("No traces found for template_intensities.")
 
+    template_snippets = []
+
+    # make template
+    for _, group in template_data.groupby(["id", "intensity"], sort=False):
+        time = group["time"].to_numpy()
+        signal = group["voltage"].to_numpy()
+
+        if slope_transform:
+            signal = np.gradient(signal, time)
+
+        template_start, template_stop = window_to_indices(time, template_window)
+        template_snippets.append(signal[template_start:template_stop])
+
+    template = np.mean(np.vstack(template_snippets), axis=0)
+
+    if template.size < 3:
+        raise ValueError("Template window must contain at least 3 samples.")
+
+    center_idx = int(template.size // 2)
     left = center_idx
     right = template.size - center_idx - 1
 
+    results = []
+
+    # fit template
     for (id_value, intensity), group in intermediate.groupby(["id", "intensity"], sort=False):
         time = group["time"].to_numpy()
         signal = group["voltage"].to_numpy()
 
+        if slope_transform:
+            signal = np.gradient(signal, time)
+
         start_idx, stop_idx = window_to_indices(time, search_window)
 
         first_center = start_idx + left
-        last_center = stop_idx - right  # exclusive, like normal Python
+        last_center = stop_idx - right
 
         if last_center <= first_center:
             raise ValueError("Search window is too small for this template.")
 
         best_corr = -np.inf
+
         best_result = {
             "id": id_value,
             "intensity": intensity,
-            "lag": np.nan,
+            "match_time": np.nan,
             "scale": np.nan,
             "corr": np.nan,
-            "r2": np.nan
+            "r2": np.nan,
         }
 
         for center in range(first_center, last_center):
@@ -102,18 +120,24 @@ def fit_template(
 
             scale = estimate_scale(snippet, template)
             r2 = estimate_r2(snippet, template)
-            lag = float((time[center] - time[first_center]) * 1000)
+            match_time = float(time[center] * 1000)
 
             best_corr = corr
             best_result = {
                 "id": id_value,
                 "intensity": intensity,
-                "lag": lag,
+                "match_time": match_time,
                 "scale": scale,
                 "corr": float(corr),
-                "r2": r2
+                "r2": r2,
             }
 
         results.append(best_result)
+    
+    fits = pd.DataFrame(results)
 
-    return pd.DataFrame(results)
+    return FeatureResult(
+        search_window=search_window,
+        template_window=template_window,
+        result=fits
+    )

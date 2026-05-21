@@ -29,7 +29,7 @@ class IntermediateResult(pa.DataFrameModel):
 class FitResult(pa.DataFrameModel):
     id: Series[str]
     intensity: Series[int] # stimulus intensity
-    lag: Series[float] # difference in ms from center of template to center of best fit
+    match_time: Series[float] # time in ms at max corr
     scale: Series[float] # vertical scale
     corr: Series[float] # pearson corr
     r2: Series[float] # r^2

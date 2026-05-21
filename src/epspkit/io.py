@@ -130,3 +130,6 @@ def load_bulk(
         raise ValueError("No files were loaded.")
 
     return pd.concat(recordings, ignore_index=True)
+
+def save_results(filename):
+    return

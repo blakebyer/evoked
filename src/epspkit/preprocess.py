@@ -27,13 +27,16 @@ def remove_stim_artifact(
     artifact_window: tuple[float, float],
     artifact: str
 ) -> DataFrame[RecordingData]:
-    if artifact not in ["zero", "interp", "template"]:
-        raise ValueError("Artifact removal method must be one of: zero, interp, or template.")
+    if artifact not in ["none","zero", "interp", "template"]:
+        raise ValueError("Artifact removal method must be one of: none, zero, interp, or template.")
 
     output_df = recording.copy()
     removed = []
 
-    if artifact in ["zero", "interp"]:
+    if artifact == "none":
+        return recording
+
+    elif artifact in ["zero", "interp"]:
         for _, group in output_df.groupby(["id", "intensity", "sweepNumber"], group_keys=False, sort=False):
             group = group.copy()
             time = group["time"].to_numpy()
