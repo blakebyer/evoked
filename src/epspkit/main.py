@@ -2,10 +2,10 @@ import os
 from epspkit import io, preprocess, template, plotting
 from epspkit.base import RecordingResult, PreprocessParams
 
-base_path = r"C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\epsp-kit\data"
+base_path = r"C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\data"
 
 
-all_files = [r'C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\epspkit\data\\2024_05_27_0001.abf',r'C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\epspkit\data\\2024_05_27_0002.abf']
+all_files = [r'C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\data\\2024_05_27_0001.abf',r'C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\data\\2024_05_27_0002.abf']
 
 # '2024_05_30_0002.abf',
 # '2024_05_30_0004.abf',

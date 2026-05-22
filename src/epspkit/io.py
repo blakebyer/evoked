@@ -19,6 +19,8 @@ import numpy as np
 """
     For ABF each slice is generally a separate file, so that carries over to the other formats. If you had 11 stimuli, 3 repeats per intensity, and 625 samples, each file will be 20k rows.
 """
+## load NWB?
+## load other file acquisition types
 
 @pa.check_types
 def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> DataFrame[RecordingData]:
