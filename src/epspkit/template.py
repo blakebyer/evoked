@@ -45,24 +45,18 @@ def estimate_corr(snippet: np.ndarray, template: np.ndarray) -> float:
 
     return float(np.dot(snippet_c, template_c) / (snippet_norm * template_norm))
 
-def fit_template(
+def build_template(
     intermediate: DataFrame[IntermediateResult],
     template_window: tuple[float, float],
-    search_window: tuple[float, float],
     template_intensities: list[int],
     slope_transform: bool = False,
-) -> FeatureResult:
-
-    template_data = intermediate[
-        intermediate["intensity"].isin(template_intensities)
-    ]
-
+) -> tuple[np.ndarray, bool]:
+    """Builds a template and returns it alongside its slope_transform state."""
+    template_data = intermediate[intermediate["intensity"].isin(template_intensities)]
     if template_data.empty:
         raise ValueError("No traces found for template_intensities.")
 
     template_snippets = []
-
-    # make template
     for _, group in template_data.groupby(["id", "intensity"], sort=False):
         time = group["time"].to_numpy()
         signal = group["voltage"].to_numpy()
@@ -73,18 +67,27 @@ def fit_template(
         template_start, template_stop = window_to_indices(time, template_window)
         template_snippets.append(signal[template_start:template_stop])
 
-    template = np.mean(np.vstack(template_snippets), axis=0)
+    template_array = np.mean(np.vstack(template_snippets), axis=0)
+    return template_array, slope_transform
 
-    if template.size < 3:
-        raise ValueError("Template window must contain at least 3 samples.")
 
-    center_idx = int(template.size // 2)
+def fit_template(
+    intermediate: DataFrame[IntermediateResult],
+    template_window: tuple[float, float],
+    search_window: tuple[float, float],
+    template_package: tuple[np.ndarray, bool],
+) -> FeatureResult:
+    """Fits a pre-built template package tuple: (template_array, slope_transform)"""
+    template_arr, slope_transform = template_package
+
+    if template_arr.size < 3:
+        raise ValueError("Template must contain at least 3 samples.")
+
+    center_idx = int(template_arr.size // 2)
     left = center_idx
-    right = template.size - center_idx - 1
+    right = template_arr.size - center_idx - 1
 
     results = []
-
-    # fit template
     for (id_value, intensity), group in intermediate.groupby(["id", "intensity"], sort=False):
         time = group["time"].to_numpy()
         signal = group["voltage"].to_numpy()
@@ -93,7 +96,6 @@ def fit_template(
             signal = np.gradient(signal, time)
 
         start_idx, stop_idx = window_to_indices(time, search_window)
-
         first_center = start_idx + left
         last_center = stop_idx - right
 
@@ -101,43 +103,55 @@ def fit_template(
             raise ValueError("Search window is too small for this template.")
 
         best_corr = -np.inf
-
         best_result = {
-            "id": id_value,
-            "intensity": intensity,
-            "match_time": np.nan,
-            "scale": np.nan,
-            "corr": np.nan,
-            "r2": np.nan,
+            "id": id_value, "intensity": intensity, "match_time": np.nan,
+            "scale": np.nan, "corr": np.nan, "r2": np.nan,
         }
 
         for center in range(first_center, last_center):
             snippet = signal[center - left : center + right + 1]
-            corr = estimate_corr(snippet, template)
+            corr = estimate_corr(snippet, template_arr)
 
             if np.isnan(corr) or corr <= best_corr:
                 continue
 
-            scale = estimate_scale(snippet, template)
-            r2 = estimate_r2(snippet, template)
+            scale = estimate_scale(snippet, template_arr)
+            r2 = estimate_r2(snippet, template_arr)
             match_time = float(time[center] * 1000)
 
             best_corr = corr
             best_result = {
-                "id": id_value,
-                "intensity": intensity,
-                "match_time": match_time,
-                "scale": scale,
-                "corr": float(corr),
-                "r2": r2,
+                "id": id_value, "intensity": intensity, "match_time": match_time,
+                "scale": scale, "corr": float(corr), "r2": r2,
             }
 
         results.append(best_result)
     
-    fits = pd.DataFrame(results)
-
     return FeatureResult(
         search_window=search_window,
         template_window=template_window,
-        result=fits
+        result=pd.DataFrame(results)
+    )
+
+
+def build_and_fit_template(
+    train_df: DataFrame[IntermediateResult],
+    test_df: DataFrame[IntermediateResult],
+    template_window: tuple[float, float],
+    search_window: tuple[float, float],
+    template_intensities: list[int],
+    slope_transform: bool = False,
+) -> FeatureResult:
+    """Builds a template from training data and fits it directly onto testing data."""
+    template_package = build_template(
+        intermediate=train_df,
+        template_window=template_window,
+        template_intensities=template_intensities,
+        slope_transform=slope_transform
+    )
+    return fit_template(
+        intermediate=test_df,
+        template_window=template_window,
+        search_window=search_window,
+        template_package=template_package
     )
