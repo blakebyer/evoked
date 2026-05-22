@@ -49,11 +49,6 @@ def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> Da
     return pd.concat(data, ignore_index=True)
 
 @pa.check_types
-def load_mat(filename, table_name: str) -> DataFrame[RecordingData]:
-    data = read_mat(filename)
-    return pd.DataFrame(data[table_name])
-
-@pa.check_types
 def load_csv(filename) -> DataFrame[RecordingData]:
     return pd.read_csv(filename, index_col=False)
 
@@ -62,13 +57,8 @@ def load_tsv(filename) -> DataFrame[RecordingData]:
     return pd.read_csv(filename, sep='\t', index_col=False)
 
 @pa.check_types
-def load_xlsx(filename) -> DataFrame[RecordingData]:
-    return pd.read_excel(filename, index_col=False)
-
-@pa.check_types
 def load_bulk(
     filenames: list[str],
-    table_name: str | None = None,
     intensities: list[int] | None = None,
     id_values: list[str] | None = None,
     repnum: int | None = None,
@@ -97,24 +87,14 @@ def load_bulk(
             )
             abf_i += 1
 
-        elif suffix == ".mat":
-            if table_name is None:
-                raise ValueError("MAT loading requires table_name.")
-            df = load_mat(file, table_name=table_name)
-
         elif suffix == ".csv":
             df = load_csv(file)
-
         elif suffix == ".tsv":
             df = load_tsv(file)
-
-        elif suffix == ".xlsx":
-            df = load_xlsx(file)
-
         else:
             raise ValueError(
                 f"Error reading {file.name}. "
-                "Suffix must be one of: .abf, .mat, .csv, .tsv, or .xlsx"
+                "Suffix must be one of: .nwb, .abf, .csv, or .tsv"
             )
 
         file_ids = set(df["id"].unique())

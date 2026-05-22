@@ -5,7 +5,8 @@ import pandera.pandas as pa
 from pandera.typing import DataFrame
 import pandas as pd
 import numpy as np
-from epspkit.base import RecordingResult, IntermediateResult
+from epspkit.base import RecordingResult, IntermediateResult, window_to_indices
+from epspkit.template import build_template, center_signal
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import matplotlib as mpl
@@ -51,7 +52,7 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
             axes[i].set_xlabel('Intensity')
             axes[i].set_title(feature)
         
-        fig.suptitle('I-O Curves')
+        fig.suptitle('IO Curves')
         plt.tight_layout()
         plt.show()
 
@@ -129,6 +130,119 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
         plt.tight_layout()
         plt.show()
 
-def plot_fit(intermediate_result: DataFrame[IntermediateResult], recording_result: RecordingResult, intensities: list[int], rc_params: dict | None = None):
+def plot_fit(intermediate_result: DataFrame[IntermediateResult], recording_result: RecordingResult, features: list[str], intensity: int, id_value: str, rc_params: dict | None = None):
     with plt.rc_context(rc_params):
-         return
+        idata = intermediate_result[
+            (intermediate_result["id"] == id_value) &
+            (intermediate_result["intensity"] == intensity)
+            ] # plot only one slice and intensity at a time
+        if idata.empty:
+            return
+        fig, axes = plt.subplots(nrows=len(features), ncols=2)
+
+        cmap = mpl.colormaps["Set2"]
+
+        for i, feature in enumerate(features):
+            r_result = recording_result.results.get(feature)
+            if r_result is None:
+                continue
+            color_val = cmap(i / max(1, len(features) - 1))
+            
+            search_window = r_result.search_window
+            slope_transform = r_result.slope_transform
+
+            rdata = r_result.result
+            row = rdata[
+                (rdata["id"] == id_value) &
+                (rdata["intensity"] == intensity)
+            ]
+            if row.empty:
+                continue
+
+            corr_arr = row['corr_arr'].iloc[0]
+            corr = row['corr'].iloc[0]
+            scale = row['scale'].iloc[0]
+            match_time_ms = row['match_time'].iloc[0]
+
+            raw_template = r_result.template
+            if raw_template is None:
+                raise ValueError(f"No stored template found for {feature}.")
+
+            t_vector = idata["time"].to_numpy()
+            v_vector = idata["voltage"].to_numpy()
+
+            signal = v_vector.copy()
+            if slope_transform:
+                signal = np.gradient(signal, t_vector)
+
+            template_c = center_signal(raw_template)
+            template_len = raw_template.size
+            center_idx = template_len // 2
+            left = center_idx
+            right = template_len - center_idx - 1
+
+            match_time_sec = match_time_ms / 1000.0
+            match_center_idx = int(np.argmin(np.abs(t_vector - match_time_sec)))
+
+            fit_start = match_center_idx - left
+            fit_stop = match_center_idx + right + 1
+
+            snippet = signal[fit_start:fit_stop]
+            snippet_mean = np.mean(snippet)
+
+            fitted = scale * template_c + snippet_mean
+            fit_time_ms = t_vector[fit_start:fit_stop] * 1000
+
+            s_start, s_stop = window_to_indices(t_vector, search_window)
+
+            axes[i, 0].plot(
+                t_vector[s_start:s_stop] * 1000,
+                signal[s_start:s_stop],
+                color="black",
+                label=f"{feature} signal"
+            )
+
+            axes[i, 0].plot(
+                fit_time_ms,
+                fitted,
+                color=color_val,
+                linewidth=2.5,
+                label=f"{feature} template fit"
+            )
+
+            fit_label = "mV/ms" if slope_transform else "mV"
+            axes[i, 0].set_ylabel(fit_label)
+            axes[i, 0].set_xlabel("Time (ms)")
+            axes[i, 0].legend(loc="best")
+            axes[i, 0].grid(alpha=0.3)
+
+            # Reconstruct valid center times for corr_arr
+            search_start, search_stop = window_to_indices(t_vector, search_window)
+            first_center = search_start + left
+            last_center = search_stop - right
+
+            corr_times_ms = t_vector[first_center:last_center] * 1000
+
+            if len(corr_times_ms) != len(corr_arr):
+                n = min(len(corr_times_ms), len(corr_arr))
+                corr_times_ms = corr_times_ms[:n]
+                corr_arr = corr_arr[:n]
+
+            axes[i, 1].plot(corr_times_ms, corr_arr, color=color_val)
+
+            axes[i, 1].scatter(
+                match_time_ms,
+                corr,
+                facecolor=color_val,
+                edgecolor="black",
+                zorder=5
+            )
+
+            axes[i, 1].set_xlabel("Time (ms)")
+            axes[i, 1].set_ylabel("Corr.")
+            axes[i, 1].grid(alpha=0.3)
+        
+        fig.suptitle(f"{intensity} µA")
+        plt.tight_layout()
+        plt.show()
+                

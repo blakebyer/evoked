@@ -105,12 +105,14 @@ def fit_template(
         best_corr = -np.inf
         best_result = {
             "id": id_value, "intensity": intensity, "match_time": np.nan,
-            "scale": np.nan, "corr": np.nan, "r2": np.nan,
+            "scale": np.nan, "corr": np.nan, "corr_arr": np.array([]), "r2": np.nan,
         }
-
+        corr_list = []
         for center in range(first_center, last_center):
             snippet = signal[center - left : center + right + 1]
             corr = estimate_corr(snippet, template_arr)
+
+            corr_list.append(corr)
 
             if np.isnan(corr) or corr <= best_corr:
                 continue
@@ -122,19 +124,22 @@ def fit_template(
             best_corr = corr
             best_result = {
                 "id": id_value, "intensity": intensity, "match_time": match_time,
-                "scale": scale, "corr": float(corr), "r2": r2,
+                "scale": scale, "corr": float(corr), "corr_arr": np.array([]), "r2": r2,
             }
 
+        best_result["corr_arr"] = np.asarray(corr_list, dtype=float)
         results.append(best_result)
     
     return FeatureResult(
         search_window=search_window,
         template_window=template_window,
+        slope_transform=slope_transform,
+        template=template_arr,
         result=pd.DataFrame(results)
     )
 
 
-def build_and_fit_template(
+def match_feature(
     train_df: DataFrame[IntermediateResult],
     test_df: DataFrame[IntermediateResult],
     template_window: tuple[float, float],

@@ -27,12 +27,24 @@ class IntermediateResult(pa.DataFrameModel):
     intensity: Series[int]
 
 class FitResult(pa.DataFrameModel):
-    id: Series[str]
-    intensity: Series[int] # stimulus intensity
-    match_time: Series[float] # time in ms at max corr
-    scale: Series[float] # vertical scale
-    corr: Series[float] # pearson corr
-    r2: Series[float] # r^2
+    """
+    A class for the template fit result.
+    Attributes:
+        id (str): The animal id
+        intensity (int): The current injected into the slice
+        match_time (float): The time in ms at the maximum correlation between fitted template and snippet
+        scale (float): The least squares coefficient
+        corr (float): The maximum Pearson correlation between fitted template and snippet
+        corr_arr (np.ndarray): A numpy array containing correlation between fitted template and snippet at every point
+        r2 (float): The coefficient of determination between fitted template and snippet
+    """
+    id: Series[str] 
+    intensity: Series[int]
+    match_time: Series[float] 
+    scale: Series[float]
+    corr: Series[float] 
+    corr_arr: Series[object] = pa.Field(nullable=False)
+    r2: Series[float]
 
 @dataclass
 class PreprocessParams:
@@ -46,6 +58,8 @@ class PreprocessParams:
 class FeatureResult:
     search_window: tuple[float, float]
     template_window: tuple[float, float]
+    slope_transform: bool
+    template: np.ndarray | None = None
     result: DataFrame[FitResult] = field(default_factory=pd.DataFrame)
 
 @dataclass
