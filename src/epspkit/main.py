@@ -4,18 +4,6 @@ from epspkit.preprocess import preprocess
 from epspkit.template import match_feature
 from epspkit.plotting import plot_trace, plot_io_curve, plot_fit
 from epspkit.base import RecordingResult, PreprocessParams
-from epspkit.base import RecordingResult, PreprocessParams
-
-import matplotlib.pyplot as plt
-import pandas as pd
-from sklearn.decomposition import PCA
-
-
-import matplotlib.pyplot as plt
-import numpy as np
-import pandas as pd
-from sklearn.decomposition import PCA
-
 
 base_path = r"C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\data"
 

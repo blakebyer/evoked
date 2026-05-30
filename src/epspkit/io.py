@@ -3,7 +3,6 @@ from pathlib import Path
 from epspkit.base import RecordingData
 from pandera.typing import DataFrame
 import pandera as pa
-from pymatreader import read_mat
 import pandas as pd
 import numpy as np
 

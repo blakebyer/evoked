@@ -1,24 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-import pandera.pandas as pa
 from pandera.typing import DataFrame
-import pandas as pd
 import numpy as np
 from epspkit.base import RecordingResult, IntermediateResult, window_to_indices
-from epspkit.template import build_template, center_signal
+from epspkit.template import center_signal
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import matplotlib as mpl
 from matplotlib.lines import Line2D
 
-# class FitResult(pa.DataFrameModel):
-#     id: Series[str]
-#     intensity: Series[int] # stimulus intensity
-#     lag: Series[float] # difference in ms from center of template to center of best fit
-#     scale: Series[float] # vertical scale
-#     corr: Series[float] # pearson corr
-#     r2: Series[float] # r^2
 
 def plot_io_curve(recording_result: RecordingResult, features: list[str], intensities: list[int], rc_params: dict | None = None):
     with plt.rc_context(rc_params):
@@ -27,10 +17,10 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
         if len(features) == 1: 
             axes = [axes]
 
-        cmap = mpl.colormaps["Set2"]
+        cmap = mpl.colormaps["Paired"]
         
         for i, feature in enumerate(features):
-            r_result = recording_result.results.get(feature)
+            r_result = recording_result.results[feature]
             if r_result is None:
                 continue
             
@@ -61,7 +51,7 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
         intermediate_result = intermediate_result[intermediate_result["id"] == id_value] # plot only one slice at a time
         fig, ax = plt.subplots()
 
-        cmap = mpl.colormaps["viridis"]
+        cmap = mpl.colormaps["cividis"]
 
         for i, intensity in enumerate(intensities):
             color_val = cmap(i / max(1, len(intensities) - 1)) if len(intensities) > 1 else 'black'
@@ -70,10 +60,10 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
             voltage = idata['voltage']
             ax.plot(time, voltage, color=color_val, label=f"{intensity}")
             if annotated:
-                feature_cmap = mpl.colormaps["Set2"]
+                feature_cmap = mpl.colormaps["Paired"]
 
                 for j, feature in enumerate(features):
-                    r_result = recording_result.results.get(feature)
+                    r_result = recording_result.results[feature]
                     if r_result is None:
                         continue
 
@@ -89,7 +79,7 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
                     feature_color = feature_cmap(j / max(1, len(features) - 1))
                     half_width = (r_result.template_window[1] - r_result.template_window[0]) / 2000
 
-                    for mt in rdata["match_time"].to_numpy() / 1000:
+                    for mt in rdata["feature_time"].to_numpy() / 1000:
                         mask = (time >= mt - half_width) & (time <= mt + half_width)
                         y = np.interp(mt, time, voltage)
 
@@ -107,7 +97,7 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
                 Line2D(
                     [0],
                     [0],
-                    color=mpl.colormaps["Set2"](i / max(1, len(features) - 1)),
+                    color=mpl.colormaps["Paired"](i / max(1, len(features) - 1)),
                     linewidth=3,
                     marker="o",
                     markeredgecolor="black",
@@ -130,24 +120,43 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
         plt.tight_layout()
         plt.show()
 
-def plot_fit(intermediate_result: DataFrame[IntermediateResult], recording_result: RecordingResult, features: list[str], intensity: int, id_value: str, rc_params: dict | None = None):
+def plot_fit(
+    intermediate_result: DataFrame[IntermediateResult],
+    recording_result: RecordingResult,
+    features: list[str],
+    intensity: int,
+    id_value: str,
+    rc_params: dict | None = None,
+):
     with plt.rc_context(rc_params):
         idata = intermediate_result[
             (intermediate_result["id"] == id_value) &
             (intermediate_result["intensity"] == intensity)
-            ] # plot only one slice and intensity at a time
+        ]
+
         if idata.empty:
             return
-        fig, axes = plt.subplots(nrows=len(features), ncols=2)
 
-        cmap = mpl.colormaps["Set2"]
+        fig, axes = plt.subplots(
+            nrows=len(features),
+            ncols=2,
+            squeeze=False,
+            figsize=(10.5, 3.0 * len(features)),
+            gridspec_kw={"width_ratios": [1.35, 1.15]},
+        )
+
+        cmap = mpl.colormaps["Paired"]
+
+        t_vector = idata["time"].to_numpy()
+        v_vector = idata["voltage"].to_numpy()
 
         for i, feature in enumerate(features):
-            r_result = recording_result.results.get(feature)
+            r_result = recording_result.results[feature]
             if r_result is None:
                 continue
+
             color_val = cmap(i / max(1, len(features) - 1))
-            
+
             search_window = r_result.search_window
             slope_transform = r_result.slope_transform
 
@@ -156,93 +165,178 @@ def plot_fit(intermediate_result: DataFrame[IntermediateResult], recording_resul
                 (rdata["id"] == id_value) &
                 (rdata["intensity"] == intensity)
             ]
+
             if row.empty:
                 continue
 
-            corr_arr = row['corr_arr'].iloc[0]
-            corr = row['corr'].iloc[0]
-            scale = row['scale'].iloc[0]
-            match_time_ms = row['match_time'].iloc[0]
+            row = row.iloc[0]
 
-            raw_template = r_result.template
-            if raw_template is None:
-                raise ValueError(f"No stored template found for {feature}.")
+            corr_arr = np.asarray(row["corr_arr"], dtype=float)
+            corr = float(row["corr"])
+            scale = float(row["scale"])
+            r2 = float(row["r2"])
+            feature_time_ms = float(row["feature_time"])
+            feature_time_s = feature_time_ms / 1000.0
 
-            t_vector = idata["time"].to_numpy()
-            v_vector = idata["voltage"].to_numpy()
+            template = getattr(r_result, "template", None)
+
+            if template is None:
+                raise ValueError(
+                    f"{feature} has no stored template. "
+                    "Store template_arr inside FeatureResultTemplate when fitting."
+                )
+
+            template = np.asarray(template, dtype=float).ravel()
 
             signal = v_vector.copy()
             if slope_transform:
                 signal = np.gradient(signal, t_vector)
 
-            template_c = center_signal(raw_template)
-            template_len = raw_template.size
-            center_idx = template_len // 2
+            center_idx = template.size // 2
             left = center_idx
-            right = template_len - center_idx - 1
+            right = template.size - center_idx - 1
 
-            match_time_sec = match_time_ms / 1000.0
-            match_center_idx = int(np.argmin(np.abs(t_vector - match_time_sec)))
+            center_sample = int(np.argmin(np.abs(t_vector - feature_time_s)))
+            fit_start = center_sample - left
+            fit_stop = center_sample + right + 1
 
-            fit_start = match_center_idx - left
-            fit_stop = match_center_idx + right + 1
+            if fit_start < 0 or fit_stop > signal.size:
+                continue
 
             snippet = signal[fit_start:fit_stop]
-            snippet_mean = np.mean(snippet)
 
-            fitted = scale * template_c + snippet_mean
-            fit_time_ms = t_vector[fit_start:fit_stop] * 1000
+            if snippet.size != template.size:
+                continue
 
-            s_start, s_stop = window_to_indices(t_vector, search_window)
+            rel_time_ms = (t_vector[fit_start:fit_stop] - t_vector[center_sample]) * 1000.0
+
+            template_centered = center_signal(template)
+            fitted = scale * template_centered + np.mean(snippet)
+
+            axes[i, 0].axvline(0.0, color="0.75", linestyle="--", linewidth=1.0)
 
             axes[i, 0].plot(
-                t_vector[s_start:s_stop] * 1000,
-                signal[s_start:s_stop],
+                rel_time_ms,
+                snippet,
                 color="black",
-                label=f"{feature} signal"
+                linewidth=1.6,
+                label=f"{feature} snippet",
             )
 
             axes[i, 0].plot(
-                fit_time_ms,
+                rel_time_ms,
                 fitted,
                 color=color_val,
-                linewidth=2.5,
-                label=f"{feature} template fit"
+                linewidth=2.2,
+                label=f"{feature} template fit",
             )
 
-            fit_label = "mV/ms" if slope_transform else "mV"
-            axes[i, 0].set_ylabel(fit_label)
-            axes[i, 0].set_xlabel("Time (ms)")
+            axes[i, 0].text(
+                0.02,
+                0.98,
+                rf"$R^2$={r2:.2f}",
+                transform=axes[i, 0].transAxes,
+                ha="left",
+                va="top",
+                color="black",
+            )
+
+            y_label = "mV/ms" if slope_transform else "mV"
+            axes[i, 0].set_ylabel(y_label)
+            axes[i, 0].set_xlabel("Relative time (ms)")
             axes[i, 0].legend(loc="best")
             axes[i, 0].grid(alpha=0.3)
 
-            # Reconstruct valid center times for corr_arr
-            search_start, search_stop = window_to_indices(t_vector, search_window)
-            first_center = search_start + left
-            last_center = search_stop - right
+            s_start, s_stop = window_to_indices(t_vector, search_window)
 
-            corr_times_ms = t_vector[first_center:last_center] * 1000
+            first_center = s_start + left
+            last_center = s_stop - right
 
-            if len(corr_times_ms) != len(corr_arr):
-                n = min(len(corr_times_ms), len(corr_arr))
-                corr_times_ms = corr_times_ms[:n]
-                corr_arr = corr_arr[:n]
+            corr_time_ms = t_vector[first_center:last_center] * 1000.0
 
-            axes[i, 1].plot(corr_times_ms, corr_arr, color=color_val)
+            # Defensive length match
+            n = min(len(corr_time_ms), len(corr_arr))
+            corr_time_ms = corr_time_ms[:n]
+            corr_arr_plot = corr_arr[:n]
 
-            axes[i, 1].scatter(
-                match_time_ms,
-                corr,
-                facecolor=color_val,
-                edgecolor="black",
-                zorder=5
+            axes[i, 1].axhline(0.0, color="0.8", linewidth=1.0)
+
+            axes[i, 1].plot(
+                corr_time_ms,
+                corr_arr_plot,
+                color=color_val,
+                linewidth=1.8,
             )
 
-            axes[i, 1].set_xlabel("Time (ms)")
+            axes[i, 1].axvline(
+                feature_time_ms,
+                color=color_val,
+                linestyle="--",
+                linewidth=1.2,
+            )
+
+            axes[i, 1].scatter(
+                [feature_time_ms],
+                [corr],
+                facecolor=color_val,
+                edgecolor="black",
+                linewidth=0.8,
+                s=40,
+                zorder=5,
+            )
+
             axes[i, 1].set_ylabel("Corr.")
+            axes[i, 1].set_xlabel("Time (ms)")
             axes[i, 1].grid(alpha=0.3)
+
+        fig.suptitle(f"{intensity} µA", fontsize=16, fontweight="bold")
+        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+        plt.show()
+
+def plot_detected(fit_result: RecordingResult, snr_result: RecordingResult, feature: str, rc_params: dict | None = None):
+    with plt.rc_context(rc_params):
+        if fit_result is None or snr_result is None:
+            raise ValueError("Template result and SNR result must both be provided")
+
+        f_result = fit_result.results.get(feature)
+        s_result = snr_result.results.get(feature)
+
+        if f_result is None or s_result is None:
+            raise ValueError(f"Missing feature '{feature}' in template or SNR results")
+
+        detection = (
+            s_result.result[["id", "intensity", "detected"]]
+            .rename(columns={"detected": "snr_detected"})
+            .merge(
+                f_result.result[["id", "intensity", "detected"]]
+                .rename(columns={"detected": "template_detected"}),
+                on=["id", "intensity"],
+                how="inner"
+            )
+        )
+
+        plot_df = (
+            detection
+            .groupby("intensity", as_index=False)
+            .agg(
+                snr_percent_detected=("snr_detected", lambda x: x.mean() * 100),
+                template_percent_detected=("template_detected", lambda x: x.mean() * 100)
+            )
+        )
         
-        fig.suptitle(f"{intensity} µA")
+        
+        fig, ax = plt.subplots(figsize=(6, 4))
+
+        ax.plot(plot_df["intensity"], plot_df["snr_percent_detected"],
+                marker="o", label="SNR")
+
+        ax.plot(plot_df["intensity"], plot_df["template_percent_detected"],
+                marker="o", label="Template")
+
+        ax.set_xlabel("Stimulus Intensity (µA)")
+        ax.set_ylabel("Detected (%)")
+        ax.set_ylim(0, 105)
+        ax.legend(frameon=False)
+        fig.suptitle(f"{feature} Detected")
         plt.tight_layout()
         plt.show()
-                

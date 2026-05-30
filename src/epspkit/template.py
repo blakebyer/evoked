@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from epspkit.base import IntermediateResult, FitResult, FeatureResult, RecordingResult, window_to_indices
+from epspkit.base import IntermediateResult, FitResult, FeatureResultTemplate, RecordingResult, window_to_indices
 from pandera.typing import DataFrame
 
 def center_signal(signal: np.ndarray):
@@ -76,7 +76,8 @@ def fit_template(
     template_window: tuple[float, float],
     search_window: tuple[float, float],
     template_package: tuple[np.ndarray, bool],
-) -> FeatureResult:
+    r2_threshold: float,
+) -> FeatureResultTemplate:
     """Fits a pre-built template package tuple: (template_array, slope_transform)"""
     template_arr, slope_transform = template_package
 
@@ -104,7 +105,7 @@ def fit_template(
 
         best_corr = -np.inf
         best_result = {
-            "id": id_value, "intensity": intensity, "match_time": np.nan,
+            "id": id_value, "intensity": intensity, "feature_time": np.nan,
             "scale": np.nan, "corr": np.nan, "corr_arr": np.array([]), "r2": np.nan,
         }
         corr_list = []
@@ -119,18 +120,22 @@ def fit_template(
 
             scale = estimate_scale(snippet, template_arr)
             r2 = estimate_r2(snippet, template_arr)
-            match_time = float(time[center] * 1000)
+            feature_time = float(time[center] * 1000)
+
+            detected = np.isfinite(r2) and r2 >= r2_threshold
 
             best_corr = corr
             best_result = {
-                "id": id_value, "intensity": intensity, "match_time": match_time,
+                "id": id_value, "intensity": intensity, "feature_time": feature_time,
                 "scale": scale, "corr": float(corr), "corr_arr": np.array([]), "r2": r2,
+                "detected":detected
             }
 
+        
         best_result["corr_arr"] = np.asarray(corr_list, dtype=float)
         results.append(best_result)
     
-    return FeatureResult(
+    return FeatureResultTemplate(
         search_window=search_window,
         template_window=template_window,
         slope_transform=slope_transform,
@@ -139,14 +144,15 @@ def fit_template(
     )
 
 
-def match_feature(
+def template_detect(
     train_df: DataFrame[IntermediateResult],
     test_df: DataFrame[IntermediateResult],
     template_window: tuple[float, float],
     search_window: tuple[float, float],
     template_intensities: list[int],
+    r2_threshold: float,
     slope_transform: bool = False,
-) -> FeatureResult:
+) -> FeatureResultTemplate:
     """Builds a template from training data and fits it directly onto testing data."""
     template_package = build_template(
         intermediate=train_df,
@@ -158,5 +164,6 @@ def match_feature(
         intermediate=test_df,
         template_window=template_window,
         search_window=search_window,
-        template_package=template_package
+        template_package=template_package,
+        r2_threshold=r2_threshold,
     )

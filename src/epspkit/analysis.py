@@ -1,8 +1,49 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.linear_model import LogisticRegression
+from epspkit.base import RecordingResult
 
+def event_classifier(recording_result: RecordingResult, features: list[str], r2_cutoff: float):
+        return None
 
-def bernoulli():
-    """For population spike"""
-    return None
+def pop_spike_threshold(
+    events: np.ndarray,
+    slope: np.ndarray,
+    x_label: str = "fEPSP Scale",
+):
+    """For population spike
+    Arguments:
+        events: np.ndarray an array of bools
+        slope: np.ndarray an array of floats
+    """
+    events = np.asarray(events, dtype=int)
+    slope = np.asarray(slope, dtype=float).reshape(-1,1) # must be 2D
+
+    ps_model = LogisticRegression()
+    ps_model.fit(slope, events)
+
+    ps_thresh = -ps_model.intercept_[0] / ps_model.coef_[0][0] # slope where prob of ps exceeds 0.5
+
+    slope_smooth = np.linspace(slope.min(), slope.max(), 100).reshape(-1, 1)
+
+    ps_probs = ps_model.predict_proba(slope_smooth)[:, 1]
+
+    plt.scatter(slope, events, label='Actual Data')
+    plt.plot(slope_smooth, ps_probs, label='Logistic Regression', color='blue')
+    plt.xlabel(x_label)
+    plt.ylabel("Prob(Population Spike)")
+    plt.legend()
+    plt.show()
+    return ps_thresh
+
+if __name__ == "__main__":
+    e = np.array([0,1,0,0,1,0,1,1])
+    x = np.array([1.2,3.3, 2.5, 0.9,1.45,1.7,2.8,3.1])
+
+    ps = pop_spike_threshold(e, x)
+    print(ps)
 
 def plot_single_intensity_pca(prep_df: pd.DataFrame, target_intensity: int = 600):
     """Isolates a single intensity step to uncover unsupervised shape and feature

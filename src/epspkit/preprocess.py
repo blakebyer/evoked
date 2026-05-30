@@ -10,7 +10,7 @@ from scipy.ndimage import uniform_filter1d
 
 def baseline_correct(recording: DataFrame[RecordingData], baseline_window: tuple[float,float]) -> DataFrame[RecordingData]:
     corrected = []
-    for intensity, group in recording.groupby(["id","intensity","sweepNumber"],group_keys=False, sort=False):
+    for _, group in recording.groupby(["id","intensity","sweepNumber"],group_keys=False, sort=False):
         group = group.copy()
         time = group["time"].to_numpy()
         voltage = group["voltage"].to_numpy()

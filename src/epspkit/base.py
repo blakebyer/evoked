@@ -32,7 +32,7 @@ class FitResult(pa.DataFrameModel):
     Attributes:
         id (str): The animal id
         intensity (int): The current injected into the slice
-        match_time (float): The time in ms at the maximum correlation between fitted template and snippet
+        feature_time (float): The time in ms at the maximum correlation between fitted template and snippet
         scale (float): The least squares coefficient
         corr (float): The maximum Pearson correlation between fitted template and snippet
         corr_arr (np.ndarray): A numpy array containing correlation between fitted template and snippet at every point
@@ -40,11 +40,21 @@ class FitResult(pa.DataFrameModel):
     """
     id: Series[str] 
     intensity: Series[int]
-    match_time: Series[float] 
+    feature_time: Series[float] 
     scale: Series[float]
     corr: Series[float] 
     corr_arr: Series[object] = pa.Field(nullable=False)
     r2: Series[float]
+    detected: Series[bool]
+
+class SNRResult(pa.DataFrameModel):
+    id: Series[str]
+    intensity: Series[int]
+    feature_time: Series[int]
+    value: Series[float]
+    noise_sd: Series[float]
+    snr: Series[float]
+    detected: Series[bool]
 
 @dataclass
 class PreprocessParams:
@@ -55,7 +65,7 @@ class PreprocessParams:
     smoothing_params: dict = field(default_factory=dict)
 
 @dataclass
-class FeatureResult:
+class FeatureResultTemplate:
     search_window: tuple[float, float]
     template_window: tuple[float, float]
     slope_transform: bool
@@ -63,10 +73,16 @@ class FeatureResult:
     result: DataFrame[FitResult] = field(default_factory=pd.DataFrame)
 
 @dataclass
+class FeatureResultSNR:
+    search_window: tuple[float, float]
+    noise_window: tuple[float, float]
+    slope_transform: bool
+    result: DataFrame[SNRResult] = field(default_factory=pd.DataFrame)
+    
+@dataclass
 class RecordingResult:
     preprocess_params: PreprocessParams
-    results: dict[str, FeatureResult] = field(default_factory=dict)
-    def get(self, result_key: str) -> FeatureResult:
-        return self.results[result_key]
-    def add(self, result_key: str, feature_result: FeatureResult) -> None:
+    results: dict[str, FeatureResultTemplate | FeatureResultSNR] = field(default_factory=dict)
+    def add(self, result_key: str, feature_result: FeatureResultTemplate | FeatureResultSNR) -> None:
         self.results[result_key] = feature_result
+
