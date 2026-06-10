@@ -99,7 +99,7 @@ def load_bulk(
         file_ids = set(df["id"].unique())
         duplicated_ids = seen_ids.intersection(file_ids)
 
-        if duplicated_ids:
+        if duplicated_ids: # fix this, maybe multiple slices per animal
             raise ValueError(
                 f"Duplicate id(s) found across files: {sorted(duplicated_ids)}"
             )

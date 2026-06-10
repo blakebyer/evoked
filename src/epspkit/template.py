@@ -144,7 +144,7 @@ def fit_template(
     )
 
 
-def template_detect(
+def match_feature(
     train_df: DataFrame[IntermediateResult],
     test_df: DataFrame[IntermediateResult],
     template_window: tuple[float, float],

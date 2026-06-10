@@ -9,7 +9,6 @@ from matplotlib.ticker import FuncFormatter
 import matplotlib as mpl
 from matplotlib.lines import Line2D
 
-
 def plot_io_curve(recording_result: RecordingResult, features: list[str], intensities: list[int], rc_params: dict | None = None):
     with plt.rc_context(rc_params):
         fig, axes = plt.subplots(ncols=len(features))
@@ -41,10 +40,12 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
             axes[i].set_ylabel('Scale')
             axes[i].set_xlabel('Intensity')
             axes[i].set_title(feature)
+            axes[i].grid(alpha=0.3)
         
         fig.suptitle('IO Curves')
         plt.tight_layout()
-        plt.show()
+
+        return fig, axes
 
 def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_result: RecordingResult, features: list[str], intensities: list[int], id_value: str,annotated: bool = False, rc_params: dict | None = None):
     with plt.rc_context(rc_params):
@@ -118,7 +119,8 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
         ax.grid(alpha=0.3)
         ax.xaxis.set_major_formatter(FuncFormatter(lambda x, pos: f"{x * 1000:.0f}"))
         plt.tight_layout()
-        plt.show()
+
+        return fig, ax
 
 def plot_fit(
     intermediate_result: DataFrame[IntermediateResult],
@@ -135,7 +137,7 @@ def plot_fit(
         ]
 
         if idata.empty:
-            return
+            return None, None
 
         fig, axes = plt.subplots(
             nrows=len(features),
@@ -291,52 +293,33 @@ def plot_fit(
 
         fig.suptitle(f"{intensity} µA", fontsize=16, fontweight="bold")
         fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
-        plt.show()
 
-def plot_detected(fit_result: RecordingResult, snr_result: RecordingResult, feature: str, rc_params: dict | None = None):
+        return fig, axes
+
+def plot_detected(recording_result: RecordingResult, feature: str, rc_params: dict | None = None):
     with plt.rc_context(rc_params):
-        if fit_result is None or snr_result is None:
-            raise ValueError("Template result and SNR result must both be provided")
 
-        f_result = fit_result.results.get(feature)
-        s_result = snr_result.results.get(feature)
-
-        if f_result is None or s_result is None:
-            raise ValueError(f"Missing feature '{feature}' in template or SNR results")
-
-        detection = (
-            s_result.result[["id", "intensity", "detected"]]
-            .rename(columns={"detected": "snr_detected"})
-            .merge(
-                f_result.result[["id", "intensity", "detected"]]
-                .rename(columns={"detected": "template_detected"}),
-                on=["id", "intensity"],
-                how="inner"
-            )
-        )
-
+        r_result = recording_result.results.get(feature)
+        detection = r_result.result
+        
         plot_df = (
             detection
             .groupby("intensity", as_index=False)
             .agg(
-                snr_percent_detected=("snr_detected", lambda x: x.mean() * 100),
-                template_percent_detected=("template_detected", lambda x: x.mean() * 100)
+                percent_detected=("detected", lambda x: x.mean() * 100)
             )
         )
         
         
-        fig, ax = plt.subplots(figsize=(6, 4))
+        fig, ax = plt.subplots()
 
-        ax.plot(plot_df["intensity"], plot_df["snr_percent_detected"],
-                marker="o", label="SNR")
-
-        ax.plot(plot_df["intensity"], plot_df["template_percent_detected"],
+        ax.plot(plot_df["intensity"], plot_df["percent_detected"],
                 marker="o", label="Template")
-
         ax.set_xlabel("Stimulus Intensity (µA)")
         ax.set_ylabel("Detected (%)")
         ax.set_ylim(0, 105)
         ax.legend(frameon=False)
         fig.suptitle(f"{feature} Detected")
         plt.tight_layout()
-        plt.show()
+
+        return fig, ax
