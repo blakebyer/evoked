@@ -1,12 +1,11 @@
-# epspkit
-A toolkit for analyzing excitatory post-synaptic potentials (EPSPs).
+# evoked
+A toolkit for analyzing evoked potentials.
 
 ## What it does
-- Load ABF recordings into tidy and averaged pandas DataFrames
-- Apply transforms (baseline correction, stim artifact removal, averaging)
-- Run features (fiber volley, fEPSP slope, population spike)
-- Render plots and/or save plot images
-- Save results to a single Excel workbook per input file
+- Load ABF/CSV recordings into tidy pandas DataFrames
+- Preprocesses tidy data (baseline correction, stim artifact removal, averaging)
+- Matches features (e.g., fiber volley, fEPSP slope, population spike)
+- Renders and saves common plots (e.g., IO curves)
 
 ## Usage
 ### 1. Install Poetry

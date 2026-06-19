@@ -47,15 +47,6 @@ class FitResult(pa.DataFrameModel):
     r2: Series[float]
     detected: Series[bool]
 
-class SNRResult(pa.DataFrameModel):
-    id: Series[str]
-    intensity: Series[int]
-    feature_time: Series[int]
-    value: Series[float]
-    noise_sd: Series[float]
-    snr: Series[float]
-    detected: Series[bool]
-
 @dataclass
 class PreprocessParams:
     baseline_window: tuple[float, float]
@@ -71,18 +62,11 @@ class FeatureResultTemplate:
     slope_transform: bool
     template: np.ndarray | None = None
     result: DataFrame[FitResult] = field(default_factory=pd.DataFrame)
-
-@dataclass
-class FeatureResultSNR:
-    search_window: tuple[float, float]
-    noise_window: tuple[float, float]
-    slope_transform: bool
-    result: DataFrame[SNRResult] = field(default_factory=pd.DataFrame)
     
 @dataclass
 class RecordingResult:
     preprocess_params: PreprocessParams
-    results: dict[str, FeatureResultTemplate | FeatureResultSNR] = field(default_factory=dict)
-    def add(self, result_key: str, feature_result: FeatureResultTemplate | FeatureResultSNR) -> None:
+    results: dict[str, FeatureResultTemplate] = field(default_factory=dict)
+    def add(self, result_key: str, feature_result: FeatureResultTemplate) -> None:
         self.results[result_key] = feature_result
 

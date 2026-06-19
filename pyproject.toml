@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "epspkit"
 version = "0.1.0"
-description = "A toolkit for analyzing excitatory post-synaptic potentials (EPSPs) from ABF recordings."
+description = "A toolkit for analyzing evoked potentials"
 readme = "README.md"
 requires-python = ">=3.9"
 authors=["Blake Byer"]
@@ -10,8 +10,8 @@ authors=["Blake Byer"]
 matplotlib = "3.10.8"
 numpy = "2.4.1"
 pandas = "2.3.3"
+pandera = "0.31.1"
 pyabf = "2.3.8"
-scienceplots = "2.2.0"
 scipy = "1.17.0"
 
 [project.urls]
