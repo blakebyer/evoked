@@ -1,10 +1,12 @@
 [tool.poetry]
 name = "evoked"
 version = "0.1.0"
-description = "A toolkit for analyzing evoked potentials"
+description = "A package for analyzing evoked local field potentials using template matching."
 readme = "README.md"
 requires-python = ">=3.9"
 authors=["Blake Byer"]
+
+packages = [{ include = "evoked", from = "src" }]
 
 [tool.poetry.dependencies]
 matplotlib = "3.10.8"
@@ -13,6 +15,7 @@ pandas = "2.3.3"
 pandera = "0.31.1"
 pyabf = "2.3.8"
 scipy = "1.17.0"
+streamlit = "1.46.1"
 
 [project.urls]
 repository = "https://github.com/blakebyer/evoked"

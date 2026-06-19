@@ -1,6 +1,6 @@
 import pyabf
 from pathlib import Path
-import dataclasses
+from dataclasses import asdict
 from evoked.base import RecordingData, RecordingResult
 from pandera.typing import DataFrame
 import pandera as pa
@@ -121,14 +121,52 @@ def load_bulk(
 
     return pd.concat(recordings, ignore_index=True)
 
-# def save_results_xlsx(recording_result: RecordingResult, filename):
-#     for 
-#     return
-
 def save_results_json(recording_result: RecordingResult, filepath: str):
     """Export recording result to JSON"""
     # Convert dataclasses to dicts, then handle dataframes and arrays on the fly
-    data = dataclasses.asdict(recording_result)
+    data = asdict(recording_result)
     
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, default=lambda x: x.to_dict(orient="records") if isinstance(x, pd.DataFrame) else (x.tolist() if isinstance(x, np.ndarray) else str(x)))
+
+def save_results_xlsx(recording_result: RecordingResult, path):
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        # Pipeline sheet
+        pp = asdict(recording_result.preprocess_params)
+        pp_df = pd.DataFrame({
+            "parameter": pp.keys(),
+            "value": [
+                json.dumps(v) if isinstance(v, (tuple, list, dict)) else v
+                for v in pp.values()
+            ],
+        })
+        pp_df.to_excel(writer, sheet_name="Pipeline", index=False)
+
+        # One sheet per feature
+        for name, fr in recording_result.results.items():
+            sheet = name[:31]
+
+            header = pd.DataFrame({
+                "parameter": [
+                    "search_window",
+                    "template_window",
+                    "slope_transform",
+                    "template",
+                ],
+                "value": [
+                    json.dumps(fr.search_window),
+                    json.dumps(fr.template_window),
+                    fr.slope_transform,
+                    json.dumps(fr.template.tolist() if isinstance(fr.template, np.ndarray) else fr.template),
+                ],
+            })
+
+            result = fr.result.copy()
+            if "corr_arr" in result.columns:
+                result["corr_arr"] = result["corr_arr"].apply(
+                    lambda x: json.dumps(x.tolist() if isinstance(x, np.ndarray) else x)
+                )
+
+            header.to_excel(writer, sheet_name=sheet, index=False, startrow=0)
+            result.to_excel(writer, sheet_name=sheet, index=False, startrow=len(header) + 2)
+
