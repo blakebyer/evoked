@@ -8,7 +8,7 @@ authors = [{ name = "Blake Byer", email = "blake@blakebyer.com" }, ]
 packages = [{ include = "evoked", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
+python = ">=3.10"
 matplotlib = "3.10.8"
 numpy = "2.4.1"
 pandas = "2.3.3"
