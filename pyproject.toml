@@ -3,12 +3,12 @@ name = "evoked"
 version = "0.1.0"
 description = "A package for analyzing evoked local field potentials using template matching."
 readme = "README.md"
-requires-python = ">=3.9"
 authors=["Blake Byer"]
 
 packages = [{ include = "evoked", from = "src" }]
 
 [tool.poetry.dependencies]
+python = ">=3.9,<4.0"
 matplotlib = "3.10.8"
 numpy = "2.4.1"
 pandas = "2.3.3"
@@ -19,3 +19,7 @@ streamlit = "1.46.1"
 
 [project.urls]
 repository = "https://github.com/blakebyer/evoked"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
