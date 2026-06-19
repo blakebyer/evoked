@@ -29,7 +29,7 @@ Edit `main.py` and run:
 ```bash
 poetry run python -m evoked.main
 ```
-See `examples/analysis_2026_06_19.ipynb` for detailed instructions. 
+See [examples/analysis_2026_06_19.ipynb](https://github.com/blakebyer/evoked/blob/main/src/evoked/examples/analysis_2026_06_19.ipynb) for detailed instructions. 
 
 ### Web App ###
 evoked comes with a basic streamlit web app, which can be run by:
