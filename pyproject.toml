@@ -1,4 +1,4 @@
-[tool.poetry]
+[project]
 name = "evoked"
 version = "0.1.0"
 description = "A package for analyzing evoked local field potentials using template matching."
