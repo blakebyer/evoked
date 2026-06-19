@@ -56,7 +56,7 @@ class PreprocessParams:
     smoothing_params: dict = field(default_factory=dict)
 
 @dataclass
-class FeatureResultTemplate:
+class FeatureResult:
     search_window: tuple[float, float]
     template_window: tuple[float, float]
     slope_transform: bool
@@ -66,7 +66,7 @@ class FeatureResultTemplate:
 @dataclass
 class RecordingResult:
     preprocess_params: PreprocessParams
-    results: dict[str, FeatureResultTemplate] = field(default_factory=dict)
-    def add(self, result_key: str, feature_result: FeatureResultTemplate) -> None:
+    results: dict[str, FeatureResult] = field(default_factory=dict)
+    def add(self, result_key: str, feature_result: FeatureResult) -> None:
         self.results[result_key] = feature_result
 

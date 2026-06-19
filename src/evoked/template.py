@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from epspkit.base import IntermediateResult, FitResult, FeatureResultTemplate, RecordingResult, window_to_indices
+from evoked.base import IntermediateResult, FitResult, FeatureResult, RecordingResult, window_to_indices
 from pandera.typing import DataFrame
 
 def center_signal(signal: np.ndarray):
@@ -77,7 +77,7 @@ def fit_template(
     search_window: tuple[float, float],
     template_package: tuple[np.ndarray, bool],
     r2_threshold: float,
-) -> FeatureResultTemplate:
+) -> FeatureResult:
     """Fits a pre-built template package tuple: (template_array, slope_transform)"""
     template_arr, slope_transform = template_package
 
@@ -135,7 +135,7 @@ def fit_template(
         best_result["corr_arr"] = np.asarray(corr_list, dtype=float)
         results.append(best_result)
     
-    return FeatureResultTemplate(
+    return FeatureResult(
         search_window=search_window,
         template_window=template_window,
         slope_transform=slope_transform,
@@ -152,7 +152,7 @@ def match_feature(
     template_intensities: list[int],
     r2_threshold: float,
     slope_transform: bool = False,
-) -> FeatureResultTemplate:
+) -> FeatureResult:
     """Builds a template from training data and fits it directly onto testing data."""
     template_package = build_template(
         intermediate=train_df,

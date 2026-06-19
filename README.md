@@ -22,7 +22,7 @@ poetry install
 ```
 ### 3. Edit quick start pipeline
 ```python
-from epspkit.core.config import (
+from evoked.core.config import (
     FeatureConfig,
     IOConfig,
     PipelineConfig,
@@ -30,7 +30,7 @@ from epspkit.core.config import (
     TransformConfig,
     VizConfig,
 )
-from epspkit.pipeline.api import run_pipeline
+from evoked.pipeline.api import run_pipeline
 
 pipeline_config = PipelineConfig(
     io=IOConfig(
@@ -81,7 +81,7 @@ run_pipeline(pipeline_config)
 
 ### 4. Run via Poetry:
 ```bash
-poetry run python -m epspkit.cli.main
+poetry run python -m evoked.cli.main
 ```
 
 Optional notebook extras:
@@ -104,4 +104,4 @@ poetry install -E notebook
 - `examples/quickstart.ipynb`
 
 ## Docs
-A description of the package in further detail can be found in `docs/epspkit.md`
+A description of the package in further detail can be found in `docs/evoked.md`

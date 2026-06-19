@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from epspkit.base import RecordingData, IntermediateResult, window_to_indices
-from epspkit.template import estimate_scale
+from evoked.base import RecordingData, IntermediateResult, PreprocessParams, window_to_indices
+from evoked.template import estimate_scale
 import numpy as np
 import pandas as pd
 from pandera.typing import DataFrame
@@ -107,8 +107,8 @@ def average_traces(
 
     return pd.concat(averaged, ignore_index=True)
 
-def apply_smoothing(intermediate: DataFrame[IntermediateResult], smoothing: str, 
-                    smoothing_params: dict
+def apply_smoothing(intermediate: DataFrame[IntermediateResult], smoothing: str,
+                    smoothing_params: dict,
 ) -> DataFrame[IntermediateResult]:
     if smoothing == "none":
             return intermediate
@@ -146,20 +146,10 @@ def apply_smoothing(intermediate: DataFrame[IntermediateResult], smoothing: str,
 
 def preprocess( # super function
         recording: DataFrame[RecordingData], 
-        baseline_window: tuple[float,float], 
-        artifact_window: tuple[float,float], 
-        artifact="template", 
-        smoothing="savgol", 
-        smoothing_params: dict = {
-                            "size": 7, # size for uniform filter
-                            "window_length": 15, # window_length and polyorder for savitzky-golay
-                            "polyorder": 3, 
-                            "cutoff": 2000.0, # cutoff and order for butterworth lowpass
-                            "order": 3,
-                    }
+        params: PreprocessParams
 ) -> DataFrame[IntermediateResult]:
-    corrected = baseline_correct(recording, baseline_window=baseline_window)
-    removed = remove_stim_artifact(corrected, artifact_window=artifact_window, artifact=artifact)
+    corrected = baseline_correct(recording, baseline_window=params.baseline_window)
+    removed = remove_stim_artifact(corrected, artifact_window=params.artifact_window, artifact=params.artifact)
     averaged = average_traces(removed)
-    smoothed = apply_smoothing(averaged, smoothing=smoothing, smoothing_params=smoothing_params)
+    smoothed = apply_smoothing(averaged, smoothing=params.smoothing, smoothing_params=params.smoothing_params)
     return smoothed

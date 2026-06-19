@@ -1,9 +1,9 @@
 import os
-from epspkit.io import load_bulk
-from epspkit.preprocess import preprocess
-from epspkit.template import match_feature
-from epspkit.plotting import plot_trace, plot_io_curve, plot_fit
-from epspkit.base import RecordingResult, PreprocessParams
+from evoked.io import load_bulk
+from evoked.preprocess import preprocess
+from evoked.template import match_feature
+from evoked.plotting import plot_trace, plot_io_curve, plot_fit
+from evoked.base import RecordingResult, PreprocessParams
 
 base_path = r"C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\epsp-kit\epsp-kit\src\data"
 

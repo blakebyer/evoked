@@ -1,26 +1,21 @@
 import pyabf
 from pathlib import Path
-from epspkit.base import RecordingData
+import dataclasses
+from evoked.base import RecordingData, RecordingResult
 from pandera.typing import DataFrame
 import pandera as pa
 import pandas as pd
 import numpy as np
 import warnings
+import json
 
 """
     Tabular data should look like:
     id  time  voltage  intensity  sweepNumber
     <str>  <float>  <float>  <int>  <int>  
 """
-
-"""
-    Axon binary format is more complicated because intensity metadata is not included.
-"""
-"""
-    For ABF each slice is generally a separate file, so that carries over to the other formats. If you had 11 stimuli, 3 repeats per intensity, and 625 samples, each file will be 20k rows.
-"""
-## load NWB?
-## load other file acquisition types
+# TODO:
+# Implement other file types like NWB, or make a neo loader
 
 @pa.check_types
 def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> DataFrame[RecordingData]:
@@ -74,20 +69,24 @@ def load_bulk(
 
         try:
             if suffix == ".abf":
-                if any(var is None for var in (intensities, repnum, id_values)):
-                    raise ValueError("ABF loading requires intensities, repnum, and id_values.")
+                if any(var is None for var in (intensities, repnum)):
+                    raise ValueError("ABF loading requires intensities and repnum.")
 
-                if abf_i >= len(id_values):
-                    raise ValueError("Not enough id_values provided for ABF files.")
+                if id_values is None:
+                    id_value = file.stem
+                else:
+                    if abf_i >= len(id_values):
+                        raise ValueError("Not enough id_values provided for ABF files.")
+                    id_value = id_values[abf_i]
 
                 df = load_abf(
                     file,
                     intensities=intensities,
-                    id_value=id_values[abf_i],
+                    id_value=id_value,
                     repnum=repnum
                 )
                 abf_i += 1
-
+                
             elif suffix == ".csv":
                 df = load_csv(file)
             elif suffix == ".tsv":
@@ -95,18 +94,16 @@ def load_bulk(
             else:
                 raise ValueError(
                     f"Error reading {file.name}. "
-                    "Suffix must be one of: .nwb, .abf, .csv, or .tsv"
+                    "Suffix must be one of: .abf, .csv, or .tsv"
                 )
 
-            file_ids = set(df["id"].unique())
-            duplicated_ids = seen_ids.intersection(file_ids)
+            base_id = df["id"].iloc[0] # if we've seen an animal id before, append _1, _2, ... to the same animal ids
+            matches = sum(1 for sid in seen_ids if sid == base_id or sid.startswith(f"{base_id}_"))
+            
+            if matches:
+                df["id"] = f"{base_id}_{matches}"
 
-            if duplicated_ids: # fix this, maybe multiple slices per animal
-                raise ValueError(
-                    f"Duplicate id(s) found across files: {sorted(duplicated_ids)}"
-                )
-
-            seen_ids.update(file_ids)
+            seen_ids.add(df["id"].iloc[0])
             recordings.append(df)
         except ValueError as e:
             # catch sweep errors and fail gracefully
@@ -124,5 +121,14 @@ def load_bulk(
 
     return pd.concat(recordings, ignore_index=True)
 
-def save_results(filename):
-    return
+# def save_results_xlsx(recording_result: RecordingResult, filename):
+#     for 
+#     return
+
+def save_results_json(recording_result: RecordingResult, filepath: str):
+    """Export recording result to JSON"""
+    # Convert dataclasses to dicts, then handle dataframes and arrays on the fly
+    data = dataclasses.asdict(recording_result)
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4, default=lambda x: x.to_dict(orient="records") if isinstance(x, pd.DataFrame) else (x.tolist() if isinstance(x, np.ndarray) else str(x)))

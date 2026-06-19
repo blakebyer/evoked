@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pandera.typing import DataFrame
 import numpy as np
-from epspkit.base import RecordingResult, IntermediateResult, window_to_indices
-from epspkit.template import center_signal
+from evoked.base import RecordingData, RecordingResult, IntermediateResult, window_to_indices
+from evoked.template import center_signal
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import matplotlib as mpl
 from matplotlib.lines import Line2D
+import math
 
 def plot_io_curve(recording_result: RecordingResult, features: list[str], intensities: list[int], rc_params: dict | None = None):
     with plt.rc_context(rc_params):
@@ -48,10 +49,10 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
 
         return fig, axes
 
-def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_result: RecordingResult, features: list[str], intensities: list[int], id_value: str,annotated: bool = False, rc_params: dict | None = None):
+def plot_trace(intermediate_result: DataFrame[IntermediateResult], intensities: list[int], id_value: str, recording_result: RecordingResult | None = None, features: list[str] | None = None, annotated: bool = False, rc_params: dict | None = None):
     with plt.rc_context(rc_params):
         intermediate_result = intermediate_result[intermediate_result["id"] == id_value] # plot only one slice at a time
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(8,6))
 
         cmap = mpl.colormaps["cividis"]
 
@@ -111,10 +112,10 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], recording_res
             ax.legend(
                 handles=annotation_handles,
                 title="Features",
-                loc="center right"
+                loc="lower center"
             )
 
-        ax.set_title("Evoked Field Potential")
+        fig.suptitle("Evoked Field Potential")
         ax.set_xlabel("Time (ms)")
         ax.set_ylabel("Response (mV)")
         ax.grid(alpha=0.3)
@@ -186,7 +187,7 @@ def plot_fit(
             if template is None:
                 raise ValueError(
                     f"{feature} has no stored template. "
-                    "Store template_arr inside FeatureResultTemplate when fitting."
+                    "Store template_arr inside FeatureResult when fitting."
                 )
 
             template = np.asarray(template, dtype=float).ravel()
@@ -297,30 +298,97 @@ def plot_fit(
 
         return fig, axes
 
-def plot_detected(recording_result: RecordingResult, feature: str, rc_params: dict | None = None):
+def plot_detected(recording_result: RecordingResult, features: list[str], rc_params: dict | None = None):
     with plt.rc_context(rc_params):
+        fig, ax = plt.subplots(figsize=(8,6))
 
-        r_result = recording_result.results.get(feature)
-        detection = r_result.result
+        cmap = mpl.colormaps["Paired"]
         
-        plot_df = (
-            detection
-            .groupby("intensity", as_index=False)
-            .agg(
-                percent_detected=("detected", lambda x: x.mean() * 100)
+        for i, feature in enumerate(features):
+            r_result = recording_result.results.get(feature)
+            if r_result is None:
+                continue
+
+            color_val = cmap(i / max(1, len(features) - 1))
+            
+            detection = r_result.result
+            plot_df = (
+                detection
+                .groupby("intensity", as_index=False)
+                .agg(
+                    percent_detected=("detected", lambda x: x.mean() * 100)
+                )
             )
-        )
-        
-        
-        fig, ax = plt.subplots()
-
-        ax.plot(plot_df["intensity"], plot_df["percent_detected"],
-                marker="o", label="Template")
+            
+            ax.plot(
+                plot_df["intensity"], 
+                plot_df["percent_detected"],
+                marker="o", 
+                label=feature,
+                color=color_val
+            )
+            ax.grid(alpha=0.3)
+            
+        # format shared axis
         ax.set_xlabel("Stimulus Intensity (µA)")
         ax.set_ylabel("Detected (%)")
-        ax.set_ylim(0, 105)
-        ax.legend(frameon=False)
-        fig.suptitle(f"{feature} Detected")
+        ax.set_ylim(-5, 105)
+        ax.legend(title="Features")
+        fig.suptitle("Feature Detection IO Curves")
         plt.tight_layout()
 
         return fig, ax
+    
+def plot_all_files(intermediate_result, intensities: list[int], max_per_page: int = 6, rc_params: dict | None = None):
+    """Quickly plot all files"""
+    with plt.rc_context(rc_params):
+        unique_ids = intermediate_result["id"].unique()
+        total_slices = len(unique_ids)
+        num_pages = math.ceil(total_slices / max_per_page)
+
+        nrows = 2
+        ncols = math.ceil(max_per_page / nrows)
+        
+        for page in range(num_pages):
+            start_idx = page * max_per_page
+            end_idx = min(start_idx + max_per_page, total_slices)
+            page_ids = unique_ids[start_idx:end_idx]
+            
+            # Create the master page figure
+            master_fig, master_axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(12, 10))
+            axes_flat = master_axes.flatten()
+            
+            for idx, id_value in enumerate(page_ids):
+                # make temp fig
+                temp_fig, temp_ax = plot_trace(
+                    intermediate_result=intermediate_result, 
+                    intensities=intensities, 
+                    id_value=id_value,
+                    annotated=False
+                )
+                
+                target_ax = axes_flat[idx]
+                for line in temp_ax.get_lines():
+                    target_ax.plot(line.get_xdata(), line.get_ydata(), color=line.get_color(), label=line.get_label())
+                    
+                target_ax.set_title(f"{id_value}", fontsize=10, fontweight="bold")
+                target_ax.legend(title="Stimulus Intensity (µA)")
+                target_ax.set_xlabel("Time (ms)")
+                target_ax.set_ylabel("Response (mV)")
+                target_ax.grid(alpha=0.3)
+                target_ax.xaxis.set_major_formatter(temp_ax.xaxis.get_major_formatter())
+                
+                # Close the hidden temporary figure so it doesn't clutter memory
+                plt.close(temp_fig)
+                
+            # Hide any unused grid cells if the final page has fewer than 6 slices
+            for idx in range(len(page_ids), len(axes_flat)):
+                master_axes.flatten()[idx].set_visible(False)
+                
+            master_fig.suptitle(f"Evoked Field Potentials - Page {page + 1}", fontsize=14, fontweight="bold")
+            master_fig.tight_layout()
+            return master_fig
+            
+
+    
+

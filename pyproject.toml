@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "epspkit"
+name = "evoked"
 version = "0.1.0"
 description = "A toolkit for analyzing evoked potentials"
 readme = "README.md"
@@ -15,4 +15,4 @@ pyabf = "2.3.8"
 scipy = "1.17.0"
 
 [project.urls]
-repository = "https://github.com/blakebyer/epsp-kit"
+repository = "https://github.com/blakebyer/evoked"
