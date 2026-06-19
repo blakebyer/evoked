@@ -5,6 +5,7 @@ from pandera.typing import DataFrame
 import pandera as pa
 import pandas as pd
 import numpy as np
+import warnings
 
 """
     Tabular data should look like:
@@ -71,41 +72,52 @@ def load_bulk(
         file = Path(file)
         suffix = file.suffix.lower()
 
-        if suffix == ".abf":
-            if any(var is None for var in (intensities, repnum, id_values)):
-                raise ValueError("ABF loading requires intensities, repnum, and id_values.")
+        try:
+            if suffix == ".abf":
+                if any(var is None for var in (intensities, repnum, id_values)):
+                    raise ValueError("ABF loading requires intensities, repnum, and id_values.")
 
-            if abf_i >= len(id_values):
-                raise ValueError("Not enough id_values provided for ABF files.")
+                if abf_i >= len(id_values):
+                    raise ValueError("Not enough id_values provided for ABF files.")
 
-            df = load_abf(
-                file,
-                intensities=intensities,
-                id_value=id_values[abf_i],
-                repnum=repnum
-            )
-            abf_i += 1
+                df = load_abf(
+                    file,
+                    intensities=intensities,
+                    id_value=id_values[abf_i],
+                    repnum=repnum
+                )
+                abf_i += 1
 
-        elif suffix == ".csv":
-            df = load_csv(file)
-        elif suffix == ".tsv":
-            df = load_tsv(file)
-        else:
-            raise ValueError(
-                f"Error reading {file.name}. "
-                "Suffix must be one of: .nwb, .abf, .csv, or .tsv"
-            )
+            elif suffix == ".csv":
+                df = load_csv(file)
+            elif suffix == ".tsv":
+                df = load_tsv(file)
+            else:
+                raise ValueError(
+                    f"Error reading {file.name}. "
+                    "Suffix must be one of: .nwb, .abf, .csv, or .tsv"
+                )
 
-        file_ids = set(df["id"].unique())
-        duplicated_ids = seen_ids.intersection(file_ids)
+            file_ids = set(df["id"].unique())
+            duplicated_ids = seen_ids.intersection(file_ids)
 
-        if duplicated_ids: # fix this, maybe multiple slices per animal
-            raise ValueError(
-                f"Duplicate id(s) found across files: {sorted(duplicated_ids)}"
-            )
+            if duplicated_ids: # fix this, maybe multiple slices per animal
+                raise ValueError(
+                    f"Duplicate id(s) found across files: {sorted(duplicated_ids)}"
+                )
 
-        seen_ids.update(file_ids)
-        recordings.append(df)
+            seen_ids.update(file_ids)
+            recordings.append(df)
+        except ValueError as e:
+            # catch sweep errors and fail gracefully
+            if "sweeps" in str(e):
+                warnings.warn(
+                    f"\nSkipping {file.name}: {str(e)}. "
+                    f"This file will be omitted from quantification."
+                )
+                continue 
+            else:
+                raise e
 
     if not recordings:
         raise ValueError("No files were loaded.")

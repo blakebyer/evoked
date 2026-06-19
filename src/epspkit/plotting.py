@@ -40,6 +40,7 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
             axes[i].set_ylabel('Scale')
             axes[i].set_xlabel('Intensity')
             axes[i].set_title(feature)
+            axes[i].set_xticks(range(0,700,100))
             axes[i].grid(alpha=0.3)
         
         fig.suptitle('IO Curves')
