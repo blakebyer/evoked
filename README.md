@@ -30,7 +30,7 @@ Edit `main.py` and run:
 poetry run python -m evoked.main
 ```
 ### Jupyter Notebook ###
-To run the example notebook, install the project dependencies:
+To run the example notebook:
 
 ```bash
 poetry run jupyter notebook
