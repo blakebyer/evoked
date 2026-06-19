@@ -29,7 +29,13 @@ Edit `main.py` and run:
 ```bash
 poetry run python -m evoked.main
 ```
-See [examples/analysis_2026_06_19.ipynb](https://github.com/blakebyer/evoked/blob/main/src/evoked/examples/analysis_2026_06_19.ipynb) for detailed instructions. 
+### Jupyter Notebook ###
+To run the example notebook, install the project dependencies:
+
+```bash
+poetry run jupyter notebook
+```
+Select [examples/analysis_2026_06_19.ipynb](https://github.com/blakebyer/evoked/blob/main/src/evoked/examples/analysis_2026_06_19.ipynb), follow instructions, and run it. 
 
 ### Web App ###
 evoked comes with a basic streamlit web app, which can be run by:
