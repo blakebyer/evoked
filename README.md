@@ -17,7 +17,7 @@ pipx install poetry
 ### 2. Install evoked
 ```bash
 git clone https://github.com/blakebyer/evoked.git
-cd evoked/evoked
+cd evoked
 poetry install
 ```
 
