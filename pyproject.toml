@@ -3,7 +3,7 @@ name = "evoked"
 version = "0.1.0"
 description = "A package for analyzing evoked local field potentials using template matching."
 readme = "README.md"
-authors=["Blake Byer"]
+authors = { name = "Blake Byer", email = "blake@blakebyer.com" }
 
 packages = [{ include = "evoked", from = "src" }]
 
