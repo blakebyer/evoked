@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import warnings
 import json
+from tempfile import NamedTemporaryFile
+from contextlib import contextmanager
 
 """
     Tabular data should look like:
@@ -16,6 +18,33 @@ import json
 """
 # TODO:
 # Implement other file types like NWB, or make a neo loader
+
+@contextmanager
+def as_readable_file(file):
+    """
+    Yield (name, source) where:
+    - name is the original filename-like string
+    - source is either the original path or a temporary path
+
+    This makes Streamlit UploadedFile and normal paths behave similarly.
+    """
+    name = getattr(file, "name", str(file))
+    suffix = Path(name).suffix.lower()
+
+    # Normal path-like input
+    if isinstance(file, (str, Path)):
+        yield name, Path(file)
+        return
+
+    # File-like input, e.g. Streamlit UploadedFile
+    if hasattr(file, "getvalue"):
+        with NamedTemporaryFile(suffix=suffix) as tmp:
+            tmp.write(file.getvalue())
+            tmp.flush()
+            yield name, Path(tmp.name)
+        return
+
+    raise TypeError(f"Unsupported file input type: {type(file)}")
 
 @pa.check_types
 def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> DataFrame[RecordingData]:
@@ -53,7 +82,7 @@ def load_tsv(filename) -> DataFrame[RecordingData]:
 
 @pa.check_types
 def load_bulk(
-    filenames: list[str],
+    files,
     intensities: list[int] | None = None,
     id_values: list[str] | None = None,
     repnum: int | None = None,
@@ -63,58 +92,63 @@ def load_bulk(
     seen_ids = set()
     abf_i = 0
 
-    for file in filenames:
-        file = Path(file)
-        suffix = file.suffix.lower()
+    for file in files:
+        with as_readable_file(file) as (name, source):
+            suffix = Path(name).suffix.lower()
 
-        try:
-            if suffix == ".abf":
-                if any(var is None for var in (intensities, repnum)):
-                    raise ValueError("ABF loading requires intensities and repnum.")
+            try:
+                if suffix == ".abf":
+                    if any(var is None for var in (intensities, repnum)):
+                        raise ValueError("ABF loading requires intensities and repnum.")
 
-                if id_values is None:
-                    id_value = file.stem
+                    if id_values is None:
+                        id_value = Path(name).stem
+                    else:
+                        if abf_i >= len(id_values):
+                            raise ValueError("Not enough id_values provided for ABF files.")
+                        id_value = id_values[abf_i]
+
+                    df = load_abf(
+                        source,
+                        intensities=intensities,
+                        id_value=id_value,
+                        repnum=repnum,
+                    )
+                    abf_i += 1
+
+                elif suffix == ".csv":
+                    df = load_csv(source)
+
+                elif suffix == ".tsv":
+                    df = load_tsv(source)
+
                 else:
-                    if abf_i >= len(id_values):
-                        raise ValueError("Not enough id_values provided for ABF files.")
-                    id_value = id_values[abf_i]
+                    raise ValueError(
+                        f"Error reading {name}. "
+                        "Suffix must be one of: .abf, .csv, or .tsv"
+                    )
 
-                df = load_abf(
-                    file,
-                    intensities=intensities,
-                    id_value=id_value,
-                    repnum=repnum
-                )
-                abf_i += 1
-                
-            elif suffix == ".csv":
-                df = load_csv(file)
-            elif suffix == ".tsv":
-                df = load_tsv(file)
-            else:
-                raise ValueError(
-                    f"Error reading {file.name}. "
-                    "Suffix must be one of: .abf, .csv, or .tsv"
+                base_id = df["id"].iloc[0]
+                matches = sum(
+                    1 for sid in seen_ids
+                    if sid == base_id or sid.startswith(f"{base_id}_")
                 )
 
-            base_id = df["id"].iloc[0] # if we've seen an animal id before, append _1, _2, ... to the same animal ids
-            matches = sum(1 for sid in seen_ids if sid == base_id or sid.startswith(f"{base_id}_"))
-            
-            if matches:
-                df["id"] = f"{base_id}_{matches}"
+                if matches:
+                    df["id"] = f"{base_id}_{matches}"
 
-            seen_ids.add(df["id"].iloc[0])
-            recordings.append(df)
-        except ValueError as e:
-            # catch sweep errors and fail gracefully
-            if "sweeps" in str(e):
-                warnings.warn(
-                    f"\nSkipping {file.name}: {str(e)}. "
-                    f"This file will be omitted from quantification."
-                )
-                continue 
-            else:
-                raise e
+                seen_ids.add(df["id"].iloc[0])
+                recordings.append(df)
+
+            except ValueError as e:
+                if "sweeps" in str(e):
+                    warnings.warn(
+                        f"\nSkipping {name}: {str(e)}. "
+                        f"This file will be omitted from quantification."
+                    )
+                    continue
+                else:
+                    raise e
 
     if not recordings:
         raise ValueError("No files were loaded.")
@@ -164,10 +198,6 @@ def save_results_xlsx(recording_result: RecordingResult, path):
             result = fr.result.copy()
             if "corr_arr" in result.columns:
                 result["corr_arr"] = result["corr_arr"].apply(
-                    lambda x: json.dumps(x.tolist() if isinstance(x, np.ndarray) else x)
-                )
-            elif "energy_arr" in result.columns:
-                result["energy_arr"] = result["energy_arr"].apply(
                     lambda x: json.dumps(x.tolist() if isinstance(x, np.ndarray) else x)
                 )
 

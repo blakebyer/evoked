@@ -341,6 +341,8 @@ def plot_detected(recording_result: RecordingResult, features: list[str], rc_par
     
 def plot_all_files(intermediate_result, intensities: list[int], max_per_page: int = 6, rc_params: dict | None = None):
     """Quickly plot all files"""
+    figs = []
+
     with plt.rc_context(rc_params):
         unique_ids = intermediate_result["id"].unique()
         total_slices = len(unique_ids)
@@ -354,12 +356,10 @@ def plot_all_files(intermediate_result, intensities: list[int], max_per_page: in
             end_idx = min(start_idx + max_per_page, total_slices)
             page_ids = unique_ids[start_idx:end_idx]
             
-            # Create the master page figure
             master_fig, master_axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(12, 10))
             axes_flat = master_axes.flatten()
             
             for idx, id_value in enumerate(page_ids):
-                # make temp fig
                 temp_fig, temp_ax = plot_trace(
                     intermediate_result=intermediate_result, 
                     intensities=intensities, 
@@ -368,8 +368,14 @@ def plot_all_files(intermediate_result, intensities: list[int], max_per_page: in
                 )
                 
                 target_ax = axes_flat[idx]
+
                 for line in temp_ax.get_lines():
-                    target_ax.plot(line.get_xdata(), line.get_ydata(), color=line.get_color(), label=line.get_label())
+                    target_ax.plot(
+                        line.get_xdata(),
+                        line.get_ydata(),
+                        color=line.get_color(),
+                        label=line.get_label(),
+                    )
                     
                 target_ax.set_title(f"{id_value}", fontsize=10, fontweight="bold")
                 target_ax.legend(title="Stimulus Intensity (µA)")
@@ -378,17 +384,18 @@ def plot_all_files(intermediate_result, intensities: list[int], max_per_page: in
                 target_ax.grid(alpha=0.3)
                 target_ax.xaxis.set_major_formatter(temp_ax.xaxis.get_major_formatter())
                 
-                # Close the hidden temporary figure so it doesn't clutter memory
                 plt.close(temp_fig)
                 
-            # Hide any unused grid cells if the final page has fewer than 6 slices
             for idx in range(len(page_ids), len(axes_flat)):
-                master_axes.flatten()[idx].set_visible(False)
+                axes_flat[idx].set_visible(False)
                 
-            master_fig.suptitle(f"Evoked Field Potentials - Page {page + 1}", fontsize=14, fontweight="bold")
+            master_fig.suptitle(
+                f"Evoked Field Potentials - Page {page + 1}",
+                fontsize=14,
+                fontweight="bold",
+            )
             master_fig.tight_layout()
-            return master_fig
-            
 
-    
+            figs.append(master_fig)
 
+    return figs

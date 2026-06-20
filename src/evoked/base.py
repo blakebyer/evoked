@@ -47,17 +47,6 @@ class FitResult(pa.DataFrameModel):
     r2: Series[float]
     detected: Series[bool]
 
-class EigenFitResult(pa.DataFrameModel):
-    id: Series[str]
-    intensity: Series[int]
-    feature_time: Series[float] 
-    proj_magnitude: Series[float]
-    energy: Series[float] 
-    energy_arr: Series[object] = pa.Field(nullable=False)
-    betas: Series[object] = pa.Field(nullable=False)
-    r2: Series[float]
-    detected: Series[bool]
-
 @dataclass
 class PreprocessParams:
     baseline_window: tuple[float, float]
@@ -72,7 +61,7 @@ class FeatureResult:
     template_window: tuple[float, float]
     slope_transform: bool
     template: np.ndarray | None = None
-    result: DataFrame[FitResult | EigenFitResult] = field(default_factory=pd.DataFrame)
+    result: DataFrame[FitResult] = field(default_factory=pd.DataFrame)
     
 @dataclass
 class RecordingResult:

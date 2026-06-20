@@ -1960,6 +1960,24 @@ watchdog = {version = ">=2.1.5,<7", markers = "platform_system != \"Darwin\""}
 snowflake = ["snowflake-connector-python (>=3.3.0) ; python_version < \"3.12\"", "snowflake-snowpark-python[modin] (>=1.17.0) ; python_version < \"3.12\""]
 
 [[package]]
+name = "streamlit-adjustable-columns"
+version = "0.2.1"
+description = "A Streamlit custom component for creating columns with adjustable widths"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "streamlit-adjustable-columns-0.2.1.tar.gz", hash = "sha256:b01f79c0f455d75a56d5cd03a7d769faf1ed31fcc98a1661df7583d021afb438"},
+    {file = "streamlit_adjustable_columns-0.2.1-py3-none-any.whl", hash = "sha256:2986d4cdef4422ac5da0a7fd1d52faefbf6ccf04bebdd44cf31686ee3c296eb2"},
+]
+
+[package.dependencies]
+streamlit = ">=1.0.0"
+
+[package.extras]
+dev = ["playwright (>=1.30.0)", "pytest (>=7.0.0)", "requests (>=2.25.0)"]
+
+[[package]]
 name = "tenacity"
 version = "9.1.4"
 description = "Retry code until it succeeds"
@@ -2142,4 +2160,4 @@ watchmedo = ["PyYAML (>=3.10)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "aa744530cae1c523615844db2c61c443488ac4e3290a9aeb221c158b14cc8c27"
+content-hash = "ed0b33a772a4bbff67dacc357b4a2ec241ae7f1f6fb7626bd503ff7553313900"

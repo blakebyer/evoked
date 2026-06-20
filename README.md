@@ -3,9 +3,9 @@ evoked is a package for analyzing evoked local field potentials using template m
 
 ## What it does
 - Load ABF/CSV recordings into tidy pandas DataFrames
-- Preprocesses tidy data (baseline correction, stim artifact removal, averaging)
+- Preprocesses tidy data (baseline correction, stimulus artifact removal, averaging)
 - Matches features (e.g., fiber volley, fEPSP slope, population spike)
-- Renders common plots (e.g., IO curves)
+- Renders and save common plots (e.g., IO curves)
 
 ## Installation
 ### 1. Install Poetry

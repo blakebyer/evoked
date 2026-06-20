@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from evoked.base import IntermediateResult, FitResult, FeatureResult, RecordingResult, window_to_indices
+from evoked.base import IntermediateResult, FeatureResult, window_to_indices
 from pandera.typing import DataFrame
 
 def center_signal(signal: np.ndarray):
