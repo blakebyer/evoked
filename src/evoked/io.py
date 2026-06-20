@@ -166,6 +166,10 @@ def save_results_xlsx(recording_result: RecordingResult, path):
                 result["corr_arr"] = result["corr_arr"].apply(
                     lambda x: json.dumps(x.tolist() if isinstance(x, np.ndarray) else x)
                 )
+            elif "energy_arr" in result.columns:
+                result["energy_arr"] = result["energy_arr"].apply(
+                    lambda x: json.dumps(x.tolist() if isinstance(x, np.ndarray) else x)
+                )
 
             header.to_excel(writer, sheet_name=sheet, index=False, startrow=0)
             result.to_excel(writer, sheet_name=sheet, index=False, startrow=len(header) + 2)

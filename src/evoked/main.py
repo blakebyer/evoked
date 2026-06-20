@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 def main() -> None:
     ## Determine which files are for training and testing
 
-    base_path = r"C:\Users\bbyer\OneDrive\Documents\UniversityofKentucky\BachstetterLab\evoked\evoked\src\data\newdata_ca1"
+    base_path = "/mnt/c/Users/bbyer/OneDrive/Documents/UniversityofKentucky/BachstetterLab/evoked/evoked_broken/src/data/newdata_ca1/"
 
     # get all valid ABF files
     all_files = [os.path.join(base_path, f) for f in os.listdir(base_path) if f.endswith('.abf')]
@@ -100,7 +100,7 @@ def main() -> None:
     ca1_fit_fig, ca1_fit_axes = plot_fit(test_prep, ca1_results, features=["Fiber Volley", "fEPSP", "Population Spike"], intensity=50, id_value='2026_05_28_0009')
     ca1_fit_fig1, ca1_fit_axes1 = plot_fit(test_prep, ca1_results, features=["Fiber Volley", "fEPSP", "Population Spike"], intensity=600, id_value='2026_05_28_0009')
     ca1_detected_fig, ca1_detected_axes = plot_detected(ca1_results, features=["Fiber Volley", "fEPSP", "Population Spike"])
-    plt.show()
+    ca1_detected_fig.savefig("detected.png", dpi=600, bbox_inches="tight")
 
     ## Save results
 
