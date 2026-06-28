@@ -8,7 +8,7 @@ evoked is a package for analyzing evoked local field potentials using template m
 - Renders and save common plots (e.g., IO curves)
 
 ## Installation
-### 1. [Install Python $\geq$ 3.14](https://www.python.org/downloads/)
+### 1. [Install Python >= 3.14](https://www.python.org/downloads/)
 
 ### 2. Install Poetry
 ```bash

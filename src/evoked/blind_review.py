@@ -120,7 +120,7 @@ files_list = [
     '2025_03_02_0003.abf'
 ]
 
-base_path = "data"
+base_path = os.path.join(os.path.dirname(__file__), "data")
 
 # get all valid ABF files
 all_files = [os.path.join(base_path, f) for f in files_list if f.endswith('.abf')]

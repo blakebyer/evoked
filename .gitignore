@@ -8,7 +8,6 @@ cli/__pycache__
 tests/__pycache__
 io/__pycache__
 examples/__pycache__
-data/
 results/
 test2/
 thesis/
@@ -29,3 +28,4 @@ dist/
 review/
 src/evoked/examples/ca1_2026_06_19.xlsx
 src/evoked/examples/ca1_detected.png
+src/evoked/copy_files.py
