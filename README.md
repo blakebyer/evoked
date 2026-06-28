@@ -9,15 +9,20 @@ evoked is a package for analyzing evoked local field potentials using template m
 
 ## Installation
 ### 1. [Install Python >= 3.14](https://www.python.org/downloads/)
+Check installation:
+```bash
+python3.14 --version
+```
 
 ### 2. Install Poetry
 ```bash
-python -m pip install poetry
+python3.14 -m pip install poetry
 ```
 ### 3. Install evoked
 ```bash
 git clone https://github.com/blakebyer/evoked.git
-cd src
+cd evoked
+poetry env use python3.14
 poetry install
 ```
 
@@ -40,7 +45,7 @@ Select [examples/analysis_2026_06_19.ipynb](https://github.com/blakebyer/evoked/
 ### Web App ###
 evoked comes with a basic streamlit web app, which can be run by:
 ```bash
-poetry run streamlit run app.py
+poetry run streamlit run src/evoked/app.py
 ```
 
 ## Output

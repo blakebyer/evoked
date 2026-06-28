@@ -30,20 +30,6 @@ st.markdown(
 )
 #st.title("Blind Trace Review")
 
-if "auth" not in st.session_state:
-    st.session_state.auth = False
-
-with st.container(width="content", horizontal=True):
-    if not st.session_state.auth:
-        pw = st.text_input("Access code", placeholder="Access code", type="password", label_visibility="collapsed", width=200)
-        if st.button("Enter"):
-            if pw == st.secrets["APP_PASSWORD"]:
-                st.session_state.auth = True
-                st.rerun()
-            else:
-                st.warning("Wrong access code.")
-        st.stop()
-
 if "alias" not in st.session_state:
     st.session_state.alias = ""
 
@@ -61,9 +47,9 @@ with st.container(width="content", horizontal=True):
         st.stop()
 
 # Settings
-os.makedirs("benchmark", exist_ok=True)
+os.makedirs("review", exist_ok=True)
 safe_alias = st.session_state.alias.replace(" ", "_")
-SAVE_PATH = os.path.join("benchmark", f"blind_classifier_{safe_alias}.csv")
+SAVE_PATH = os.path.join("review", f"blind_classifier_{safe_alias}.csv")
 
 REPNUM = 3
 INT_LIST = [25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600]
@@ -213,7 +199,7 @@ fig.add_trace(
 )
 
 fig.update_layout(
-    height=500,
+    height=425,
     margin=dict(l=0, r=0, t=0, b=0),
     xaxis_title="Time (ms)",
     yaxis_title="Voltage (mV)",
