@@ -213,7 +213,7 @@ fig.add_trace(
 )
 
 fig.update_layout(
-    height=425,
+    height=500,
     margin=dict(l=0, r=0, t=0, b=0),
     xaxis_title="Time (ms)",
     yaxis_title="Voltage (mV)",
