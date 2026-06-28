@@ -40,7 +40,7 @@ Select [examples/analysis_2026_06_19.ipynb](https://github.com/blakebyer/evoked/
 ### Web App ###
 evoked comes with a basic streamlit web app, which can be run by:
 ```bash
-streamlit run app.py
+poetry run streamlit run app.py
 ```
 
 ## Output

@@ -49,16 +49,16 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
 
         return fig, axes
 
-def plot_trace(intermediate_result: DataFrame[IntermediateResult], intensities: list[int], id_value: str, recording_result: RecordingResult | None = None, features: list[str] | None = None, annotated: bool = False, rc_params: dict | None = None):
+def plot_trace(intermediate: DataFrame[IntermediateResult], intensities: list[int], id_value: str, recording_result: RecordingResult | None = None, features: list[str] | None = None, annotated: bool = False, rc_params: dict | None = None):
     with plt.rc_context(rc_params):
-        intermediate_result = intermediate_result[intermediate_result["id"] == id_value] # plot only one slice at a time
+        intermediate = intermediate[intermediate["id"] == id_value] # plot only one slice at a time
         fig, ax = plt.subplots(figsize=(8,6))
 
         cmap = mpl.colormaps["cividis"]
 
         for i, intensity in enumerate(intensities):
             color_val = cmap(i / max(1, len(intensities) - 1)) if len(intensities) > 1 else 'black'
-            idata = intermediate_result[intermediate_result["intensity"] == intensity]
+            idata = intermediate[intermediate["intensity"] == intensity]
             time = idata['time']
             voltage = idata['voltage']
             ax.plot(time, voltage, color=color_val, label=f"{intensity}")
@@ -125,7 +125,7 @@ def plot_trace(intermediate_result: DataFrame[IntermediateResult], intensities: 
         return fig, ax
 
 def plot_fit(
-    intermediate_result: DataFrame[IntermediateResult],
+    intermediate: DataFrame[IntermediateResult],
     recording_result: RecordingResult,
     features: list[str],
     intensity: int,
@@ -133,9 +133,9 @@ def plot_fit(
     rc_params: dict | None = None,
 ):
     with plt.rc_context(rc_params):
-        idata = intermediate_result[
-            (intermediate_result["id"] == id_value) &
-            (intermediate_result["intensity"] == intensity)
+        idata = intermediate[
+            (intermediate["id"] == id_value) &
+            (intermediate["intensity"] == intensity)
         ]
 
         if idata.empty:
@@ -339,12 +339,12 @@ def plot_detected(recording_result: RecordingResult, features: list[str], rc_par
 
         return fig, ax
     
-def plot_all_files(intermediate_result, intensities: list[int], max_per_page: int = 6, rc_params: dict | None = None):
+def plot_all_files(intermediate, intensities: list[int], max_per_page: int = 6, rc_params: dict | None = None):
     """Quickly plot all files"""
     figs = []
 
     with plt.rc_context(rc_params):
-        unique_ids = intermediate_result["id"].unique()
+        unique_ids = intermediate["id"].unique()
         total_slices = len(unique_ids)
         num_pages = math.ceil(total_slices / max_per_page)
 
@@ -361,7 +361,7 @@ def plot_all_files(intermediate_result, intensities: list[int], max_per_page: in
             
             for idx, id_value in enumerate(page_ids):
                 temp_fig, temp_ax = plot_trace(
-                    intermediate_result=intermediate_result, 
+                    intermediate=intermediate, 
                     intensities=intensities, 
                     id_value=id_value,
                     annotated=False

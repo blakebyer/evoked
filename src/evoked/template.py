@@ -130,7 +130,6 @@ def fit_template(
                 "scale": scale, "corr": float(corr), "corr_arr": np.array([]), "r2": r2,
                 "detected":detected
             }
-
         
         best_result["corr_arr"] = np.asarray(corr_list, dtype=float)
         results.append(best_result)

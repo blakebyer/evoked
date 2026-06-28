@@ -21,3 +21,11 @@ analysis.py
 ca1_feature_clustering_600ua.png
 ca1_test_pca.png
 src/evoked/examples/.ipynb_checkpoints
+src/evoked/.streamlit/secrets.toml
+src/evoked/benchmark
+src/evoked/review
+src/evoked/review_files.txt
+dist/
+review/
+src/evoked/examples/ca1_2026_06_19.xlsx
+src/evoked/examples/ca1_detected.png

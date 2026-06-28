@@ -8,16 +8,18 @@ authors = [{ name = "Blake Byer", email = "blake@blakebyer.com" }, ]
 packages = [{ include = "evoked", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.11"
+python = ">=3.14"
 matplotlib = "3.10.8"
 numpy = "2.4.1"
 pandas = "2.3.3"
 pandera = "0.31.1"
 pyabf = "2.3.8"
 scipy = "1.17.0"
-streamlit = "1.46.1"
+streamlit = "1.58.0"
 streamlit-adjustable-columns = "0.2.1"
 openpyxl = "3.1.5"
+plotly = "6.2.0"
+
 
 [project.urls]
 repository = "https://github.com/blakebyer/evoked"
