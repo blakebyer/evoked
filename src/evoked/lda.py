@@ -151,6 +151,7 @@ def fit_template_lda(
             "score_arr": np.array([]),
             "r2": np.nan,
             "posterior": np.nan,
+            "posterior_arr": np.array([]),
             "detected": False,
         }
 
@@ -190,6 +191,7 @@ def fit_template_lda(
         posterior_arr = estimate_posterior(score_arr)
         best_i = int(np.nanargmax(score_arr))
         best_result["posterior"] = float(posterior_arr[best_i])
+        best_result["posterior_arr"] = posterior_arr
 
         results.append(best_result)
     

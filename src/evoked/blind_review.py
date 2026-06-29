@@ -238,7 +238,7 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     fv = st.radio(
-        "Fiber volley measurable?",
+        "Fiber volley quantifiable?",
         options,
         index=answer_index(current.get("fiber_volley", "Unanswered")),
         horizontal=True,
@@ -247,7 +247,7 @@ with col1:
 
 with col2:
     fepsp = st.radio(
-        "fEPSP slope measurable?",
+        "fEPSP slope quantifiable?",
         options,
         index=answer_index(current.get("fepsp", "Unanswered")),
         horizontal=True,
@@ -256,7 +256,7 @@ with col2:
 
 with col3:
     ps = st.radio(
-        "Population spike measurable?",
+        "Population spike quantifiable?",
         options,
         index=answer_index(current.get("population_spike", "Unanswered")),
         horizontal=True,
