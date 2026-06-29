@@ -47,6 +47,15 @@ class FitResult(pa.DataFrameModel):
     r2: Series[float]
     detected: Series[bool]
 
+class LDAFitResult(pa.DataFrameModel):
+    id: Series[str]
+    intensity: Series[int]
+    feature_time: Series[float] 
+    scale: Series[float]
+    score: Series[float] 
+    score_arr: Series[object] = pa.Field(nullable=False)
+    posterior: Series[float]
+
 @dataclass
 class PreprocessParams:
     baseline_window: tuple[float, float]
@@ -60,8 +69,10 @@ class FeatureResult:
     search_window: tuple[float, float]
     template_window: tuple[float, float]
     slope_transform: bool
+    r2_threshold: float
+    noise_window: tuple[float, float] | None = None
     template: np.ndarray | None = None
-    result: DataFrame[FitResult] = field(default_factory=pd.DataFrame)
+    result: DataFrame[FitResult | LDAFitResult] = field(default_factory=pd.DataFrame)
     
 @dataclass
 class RecordingResult:

@@ -8,7 +8,7 @@ def center_signal(signal: np.ndarray):
     signal_arr = np.asarray(signal, dtype=float).ravel()
     return signal_arr - float(np.mean(signal_arr))
 
-def estimate_scale(snippet: np.ndarray, template: np.ndarray) -> float:
+def estimate_scale_ols(snippet: np.ndarray, template: np.ndarray) -> float:
     snippet_c = center_signal(snippet)
     template_c = center_signal(template)
     if snippet_c.size != template_c.size:
@@ -24,7 +24,7 @@ def estimate_r2(snippet: np.ndarray, template: np.ndarray) -> float:
     template_c = center_signal(template)
     if snippet_c.size != template_c.size or snippet_c.size < 2:
         return np.nan
-    scale = estimate_scale(snippet_c, template_c)
+    scale = estimate_scale_ols(snippet_c, template_c)
     pred = scale * template_c
     sse = float(np.sum((snippet_c - pred) ** 2))
     sst = float(np.sum(snippet_c ** 2))
@@ -45,7 +45,7 @@ def estimate_corr(snippet: np.ndarray, template: np.ndarray) -> float:
 
     return float(np.dot(snippet_c, template_c) / (snippet_norm * template_norm))
 
-def build_template(
+def build_template_ols(
     intermediate: DataFrame[IntermediateResult],
     template_window: tuple[float, float],
     template_intensities: list[int],
@@ -71,7 +71,7 @@ def build_template(
     return template_array, slope_transform
 
 
-def fit_template(
+def fit_template_ols(
     intermediate: DataFrame[IntermediateResult],
     template_window: tuple[float, float],
     search_window: tuple[float, float],
@@ -118,7 +118,7 @@ def fit_template(
             if np.isnan(corr) or corr <= best_corr:
                 continue
 
-            scale = estimate_scale(snippet, template_arr)
+            scale = estimate_scale_ols(snippet, template_arr)
             r2 = estimate_r2(snippet, template_arr)
             feature_time = float(time[center] * 1000)
 
@@ -138,12 +138,12 @@ def fit_template(
         search_window=search_window,
         template_window=template_window,
         slope_transform=slope_transform,
+        r2_threshold=r2_threshold,
         template=template_arr,
         result=pd.DataFrame(results)
     )
 
-
-def match_feature(
+def match_feature_ols(
     train_df: DataFrame[IntermediateResult],
     test_df: DataFrame[IntermediateResult],
     template_window: tuple[float, float],
@@ -153,13 +153,13 @@ def match_feature(
     slope_transform: bool = False,
 ) -> FeatureResult:
     """Builds a template from training data and fits it directly onto testing data."""
-    template_package = build_template(
+    template_package = build_template_ols(
         intermediate=train_df,
         template_window=template_window,
         template_intensities=template_intensities,
         slope_transform=slope_transform
     )
-    return fit_template(
+    return fit_template_ols(
         intermediate=test_df,
         template_window=template_window,
         search_window=search_window,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from pandera.typing import DataFrame
 import numpy as np
 from evoked.base import RecordingData, RecordingResult, IntermediateResult, window_to_indices
-from evoked.template import center_signal
+from evoked.ols import center_signal
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import matplotlib as mpl

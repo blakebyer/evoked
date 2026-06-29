@@ -1,7 +1,7 @@
 import os
 from evoked.io import load_bulk, save_results_xlsx
 from evoked.preprocess import preprocess
-from evoked.template import match_feature
+from evoked.ols import match_feature_ols
 from evoked.plotting import plot_trace, plot_io_curve, plot_fit, plot_detected, plot_all_files
 from evoked.base import RecordingResult, PreprocessParams
 import matplotlib.pyplot as plt
@@ -69,7 +69,7 @@ def main() -> None:
 
     ca1_results = RecordingResult(preprocess_params=params)
 
-    ca1_results.add("Fiber Volley", match_feature(
+    ca1_results.add("Fiber Volley", match_feature_ols(
         train_df=train_prep, test_df=test_prep, 
         template_window=(1.5, 3.0), search_window=(1.0, 3.2), 
         template_intensities=template_ints, 
@@ -77,7 +77,7 @@ def main() -> None:
         slope_transform=False
     ))
 
-    ca1_results.add("fEPSP", match_feature(
+    ca1_results.add("fEPSP", match_feature_ols(
         train_df=train_prep, test_df=test_prep, 
         template_window=(3.0, 4.7), search_window=(2.5, 5.0), 
         template_intensities=template_ints, 
@@ -85,7 +85,7 @@ def main() -> None:
         slope_transform=True
     ))
 
-    ca1_results.add("Population Spike", match_feature(
+    ca1_results.add("Population Spike", match_feature_ols(
         train_df=train_prep, test_df=test_prep, 
         template_window=(4.5, 6.0), search_window=(4.0, 6.5), 
         template_intensities=template_ints, 

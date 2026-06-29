@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from evoked.base import RecordingData, IntermediateResult, PreprocessParams, window_to_indices
-from evoked.template import estimate_scale
+from evoked.ols import estimate_scale_ols
 import numpy as np
 import pandas as pd
 from pandera.typing import DataFrame
@@ -73,7 +73,7 @@ def remove_stim_artifact(
 
         for sweep, snippet in zip(sweeps, snippets):
             voltage = sweep["voltage"].to_numpy(copy=True)
-            scale = estimate_scale(snippet, artifact_template)
+            scale = estimate_scale_ols(snippet, artifact_template)
 
             if not np.isnan(scale):
                 voltage[start_idx:stop_idx] = snippet - scale * artifact_template

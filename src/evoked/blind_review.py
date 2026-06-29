@@ -35,14 +35,14 @@ if "alias" not in st.session_state:
 
 with st.container(width="content", horizontal=True):
     if st.session_state.alias == "":
-        alias = st.text_input("Reviewer Alias", placeholder="Reviewer Alias", label_visibility="collapsed", width=200)
+        alias = st.text_input("Reviewer Initials", placeholder="Reviewer Initials", label_visibility="collapsed", width=200)
 
         if st.button("Go"):
             if alias.strip():
                 st.session_state.alias = alias.strip()
                 st.rerun()
             else:
-                st.warning("Enter reviewer alias.")
+                st.warning("Enter reviewer initials.")
 
         st.stop()
 
@@ -203,7 +203,16 @@ fig.update_layout(
     margin=dict(l=0, r=0, t=0, b=0),
     xaxis_title="Time (ms)",
     yaxis_title="Voltage (mV)",
+    #dragmode="drawline",
+    modebar_add=["drawline","eraseshape"]
 )
+
+# fig.show(config={
+#     "modeBarButtonsToAdd": [
+#         "drawline",
+#         "eraseshape"
+#     ]
+# })
 
 st.plotly_chart(fig, width="stretch")
 
