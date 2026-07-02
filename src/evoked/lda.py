@@ -1,9 +1,9 @@
 """Linear discriminant analysis"""
 from __future__ import annotations
 import numpy as np
-import pandas as pd
+import polars as pl
 from evoked.base import IntermediateResult, FeatureResult, window_to_indices
-from pandera.typing import DataFrame
+from pandera.typing.polars import DataFrame
 from sklearn.covariance import OAS # Oracle Approximating Shrinkage
 from evoked.ols import center_signal
 
@@ -82,12 +82,12 @@ def build_template_lda(
     slope_transform: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
     """Builds a template, covariance matrix, and returns it alongside its slope_transform state."""
-    template_data = intermediate[intermediate["intensity"].isin(template_intensities)]
-    if template_data.empty:
+    template_data = intermediate.filter(pl.col("intensity").is_in(template_intensities))
+    if template_data.is_empty():
         raise ValueError("No traces found for template_intensities.")
 
     template_snippets, noise_snippets = [], []
-    for _, group in template_data.groupby(["id", "intensity"], sort=False):
+    for _, group in template_data.group_by(["id", "intensity"]):
         time = group["time"].to_numpy()
         signal = group["voltage"].to_numpy()
 
@@ -127,7 +127,7 @@ def fit_template_lda(
     right = template_arr.size - center_idx - 1
 
     results = []
-    for (id_value, intensity), group in intermediate.groupby(["id", "intensity"], sort=False):
+    for (id_value, intensity), group in intermediate.group_by(["id", "intensity"]):
         time = group["time"].to_numpy()
         signal = group["voltage"].to_numpy()
 
@@ -202,7 +202,7 @@ def fit_template_lda(
         r2_threshold=r2_threshold,
         noise_window=noise_window,
         template=template_arr,
-        result=pd.DataFrame(results)
+        result=pl.DataFrame(results)
     )
 
 

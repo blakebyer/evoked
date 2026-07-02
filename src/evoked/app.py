@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas as pd
+import polars as pl
 import os
 import re
 from evoked.io import load_bulk, save_results_xlsx

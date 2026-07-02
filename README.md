@@ -2,7 +2,7 @@
 evoked is a package for analyzing evoked local field potentials using template matching.
 
 ## What it does
-- Load ABF/CSV recordings into tidy pandas DataFrames
+- Load ABF/CSV recordings into tidy polars DataFrames
 - Preprocesses tidy data (baseline correction, stimulus artifact removal, averaging)
 - Matches features (e.g., fiber volley, fEPSP slope, population spike)
 - Renders and save common plots (e.g., IO curves)

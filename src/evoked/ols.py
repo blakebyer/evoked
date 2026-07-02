@@ -1,8 +1,8 @@
 from __future__ import annotations
 import numpy as np
-import pandas as pd
+import polars as pl
 from evoked.base import IntermediateResult, FeatureResult, window_to_indices
-from pandera.typing import DataFrame
+from pandera.typing.polars import DataFrame
 
 def center_signal(signal: np.ndarray):
     signal_arr = np.asarray(signal, dtype=float).ravel()
@@ -52,12 +52,12 @@ def build_template_ols(
     slope_transform: bool = False,
 ) -> tuple[np.ndarray, bool]:
     """Builds a template and returns it alongside its slope_transform state."""
-    template_data = intermediate[intermediate["intensity"].isin(template_intensities)]
-    if template_data.empty:
+    template_data = intermediate.filter(pl.col("intensity").is_in(template_intensities))
+    if template_data.is_empty():
         raise ValueError("No traces found for template_intensities.")
 
     template_snippets = []
-    for _, group in template_data.groupby(["id", "intensity"], sort=False):
+    for _, group in template_data.group_by(["id", "intensity"]):
         time = group["time"].to_numpy()
         signal = group["voltage"].to_numpy()
 
@@ -89,7 +89,7 @@ def fit_template_ols(
     right = template_arr.size - center_idx - 1
 
     results = []
-    for (id_value, intensity), group in intermediate.groupby(["id", "intensity"], sort=False):
+    for (id_value, intensity), group in intermediate.group_by(["id", "intensity"]):
         time = group["time"].to_numpy()
         signal = group["voltage"].to_numpy()
 
@@ -140,7 +140,7 @@ def fit_template_ols(
         slope_transform=slope_transform,
         r2_threshold=r2_threshold,
         template=template_arr,
-        result=pd.DataFrame(results)
+        result=pl.DataFrame(results)
     )
 
 def match_feature_ols(

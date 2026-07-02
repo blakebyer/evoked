@@ -3,24 +3,25 @@ from __future__ import annotations
 from evoked.base import RecordingData, IntermediateResult, PreprocessParams, window_to_indices
 from evoked.ols import estimate_scale_ols
 import numpy as np
-import pandas as pd
-from pandera.typing import DataFrame
+import polars as pl
+from pandera.typing.polars import DataFrame
 from scipy.signal import savgol_filter, butter, filtfilt
 from scipy.ndimage import uniform_filter1d
 
 def baseline_correct(recording: DataFrame[RecordingData], baseline_window: tuple[float,float]) -> DataFrame[RecordingData]:
     corrected = []
-    for _, group in recording.groupby(["id","intensity","sweepNumber"],group_keys=False, sort=False):
-        group = group.copy()
+    for _, group in recording.group_by(["id","intensity","sweepNumber"]):
         time = group["time"].to_numpy()
         voltage = group["voltage"].to_numpy()
         start_idx, stop_idx = window_to_indices(time, baseline_window)
         baseline = np.mean(voltage[start_idx:stop_idx])
-        group["voltage"] = group["voltage"] - baseline
+        group = group.with_columns(
+            (pl.col("voltage") - baseline).alias("voltage")
+        )
         
         corrected.append(group)
 
-    return pd.concat(corrected, ignore_index=True)
+    return pl.concat(corrected, how="vertical")
 
 def remove_stim_artifact(
     recording: DataFrame[RecordingData],
@@ -30,17 +31,16 @@ def remove_stim_artifact(
     if artifact not in ["none","zero", "interp", "template"]:
         raise ValueError("Artifact removal method must be one of: none, zero, interp, or template.")
 
-    output_df = recording.copy()
+    
     removed = []
 
     if artifact == "none":
         return recording
 
     elif artifact in ["zero", "interp"]:
-        for _, group in output_df.groupby(["id", "intensity", "sweepNumber"], group_keys=False, sort=False):
-            group = group.copy()
+        for _, group in recording.group_by(["id", "intensity", "sweepNumber"]):
             time = group["time"].to_numpy()
-            voltage = group["voltage"].to_numpy(copy=True)
+            voltage = group["voltage"].to_numpy().copy()
 
             start_idx, stop_idx = window_to_indices(time, artifact_window)
 
@@ -53,69 +53,81 @@ def remove_stim_artifact(
                     [voltage[start_idx - 1], voltage[stop_idx]],
                 )
 
-            group["voltage"] = voltage
+            group = group.with_columns(
+                pl.Series("voltage", voltage)
+            )
             removed.append(group)
 
-        return pd.concat(removed, ignore_index=True)
+        return pl.concat(removed, how="vertical")
+    elif artifact == "template":
+        for _, group in recording.group_by(["id", "intensity"]):
+            sweeps = [sweep for _, sweep in group.group_by("sweepNumber")]
 
-    for _, group in output_df.groupby(["id", "intensity"], group_keys=False, sort=False):
-        sweeps = [g.copy() for _, g in group.groupby("sweepNumber", sort=False)]
+            time = sweeps[0]["time"].to_numpy()
+            start_idx, stop_idx = window_to_indices(time, artifact_window)
 
-        time = sweeps[0]["time"].to_numpy()
-        start_idx, stop_idx = window_to_indices(time, artifact_window)
+            snippets = np.array([
+                sweep["voltage"].to_numpy()[start_idx:stop_idx]
+                for sweep in sweeps
+            ])
 
-        snippets = np.array([
-            sweep["voltage"].to_numpy()[start_idx:stop_idx]
-            for sweep in sweeps
-        ])
+            artifact_template = np.mean(snippets, axis=0)
 
-        artifact_template = np.mean(snippets, axis=0)
+            for sweep, snippet in zip(sweeps, snippets):
+                voltage = sweep["voltage"].to_numpy().copy()
+                scale = estimate_scale_ols(snippet, artifact_template)
 
-        for sweep, snippet in zip(sweeps, snippets):
-            voltage = sweep["voltage"].to_numpy(copy=True)
-            scale = estimate_scale_ols(snippet, artifact_template)
+                if not np.isnan(scale):
+                    voltage[start_idx:stop_idx] = snippet - scale * artifact_template
 
-            if not np.isnan(scale):
-                voltage[start_idx:stop_idx] = snippet - scale * artifact_template
+                sweep = sweep.with_columns(pl.Series("voltage", voltage))
+                removed.append(sweep)
 
-            sweep["voltage"] = voltage
-            removed.append(sweep)
-
-    return pd.concat(removed, ignore_index=True)
+    return pl.concat(removed,how="vertical")
 
 def average_traces(
     recording: DataFrame[RecordingData]
 ) -> DataFrame[IntermediateResult]:
     averaged = []
 
-    for (intensity,id_value), group in recording.groupby(["intensity","id"], group_keys=False, sort=False):
+    for (intensity,id_value), group in recording.group_by(["intensity","id"]):
         traces = []
-        for _, sweep in group.groupby("sweepNumber", sort=False):
+        for _, sweep in group.group_by("sweepNumber"):
             traces.append(sweep["voltage"].to_numpy())
 
         average_voltage = np.mean(np.vstack(traces), axis=0)
-        time = group[group["sweepNumber"] == group["sweepNumber"].iloc[0]]["time"].to_numpy()
+        time = (
+            group
+            .filter(pl.col("sweepNumber") == group["sweepNumber"][0])
+            ["time"]
+            .to_numpy()
+        )
 
-        avg_df = pd.DataFrame({
+        avg_df = pl.DataFrame({
             "id": id_value,
             "time": time,
             "voltage": average_voltage,
-            "intensity": intensity
-        })
+            "intensity": intensity,
+        }).with_columns(
+            pl.col("intensity").cast(pl.Int64)
+        )
 
         averaged.append(avg_df)
 
-    return pd.concat(averaged, ignore_index=True)
+    return pl.concat(averaged, how="vertical")
 
 def apply_smoothing(intermediate: DataFrame[IntermediateResult], smoothing: str,
                     smoothing_params: dict,
 ) -> DataFrame[IntermediateResult]:
     if smoothing == "none":
             return intermediate
+    elif smoothing not in ["uniform", "savgol", "butter"]:
+        raise ValueError(
+            "Smoothing method must be one of: none, uniform, savgol, or butter."
+        )
     
     smoothed = []
-    for _, group in intermediate.groupby(["intensity","id"],group_keys=False, sort=False):
-        group = group.copy()
+    for _, group in intermediate.group_by(["intensity","id"]):
         time = group["time"].to_numpy()
         voltage = group["voltage"].to_numpy()
 
@@ -136,13 +148,13 @@ def apply_smoothing(intermediate: DataFrame[IntermediateResult], smoothing: str,
             order = smoothing_params.get("order")
             fs = float(1.0 / np.mean(np.diff(time))) # fs = 1/dt
             smoothed_voltage = butter_lowpass(voltage, cutoff=cutoff, fs=fs, order=order)
-        else:
-            raise ValueError("Smoothing method must be one of: none, uniform, savgol, or butter.")
         
-        group["voltage"] = smoothed_voltage
+        group = group.with_columns(
+            pl.Series("voltage", smoothed_voltage)
+        )
         smoothed.append(group)
         
-    return pd.concat(smoothed, ignore_index=True)
+    return pl.concat(smoothed, how="vertical")
 
 def preprocess( # super function
         recording: DataFrame[RecordingData], 

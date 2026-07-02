@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 import streamlit as st
-import pandas as pd
+import polars as pl
 import plotly.graph_objects as go
 from evoked.io import load_bulk
 from evoked.preprocess import preprocess
@@ -70,40 +70,40 @@ PARAMS = PreprocessParams(
 
 files_list = [ 
     # 16 CA1
-    '2025_03_04_0002.abf',
-    '2025_03_03_0000.abf',
-    '2025_03_05_0004.abf',
-    '2025_03_06_0002.abf',
-    '2025_03_06_0010.abf', 
+    # '2025_03_04_0002.abf',
+    # '2025_03_03_0000.abf',
+    # '2025_03_05_0004.abf',
+    # '2025_03_06_0002.abf',
+    # '2025_03_06_0010.abf', 
     '2025_03_02_0000.abf', 
-    '2025_03_07_0002.abf', 
-    '2025_03_06_0004.abf', 
-    '2025_03_05_0000.abf', 
-    '2025_03_04_0012.abf',       
-    '2025_03_03_0007.abf',
-    '2025_03_07_0008.abf',
-    '2025_03_04_0000.abf',
-    '2025_05_22_0000.abf', 
-    '2025_03_05_0002.abf',
-    '2025_05_22_0006.abf',
+    # '2025_03_07_0002.abf', 
+    # '2025_03_06_0004.abf', 
+    # '2025_03_05_0000.abf', 
+    # '2025_03_04_0012.abf',       
+    # '2025_03_03_0007.abf',
+    # '2025_03_07_0008.abf',
+    # '2025_03_04_0000.abf',
+    # '2025_05_22_0000.abf', 
+    # '2025_03_05_0002.abf',
+    # '2025_05_22_0006.abf',
 
-    # 16 DG
-    '2025_05_22_0005.abf',
-    '2025_03_06_0001.abf',
-    '2025_03_05_0007.abf',
-    '2025_03_04_0003.abf',
-    '2025_03_04_0005.abf',
-    '2025_05_22_0001.abf',
-    '2025_03_07_0009.abf',
-    '2025_03_07_0005.abf',
-    '2025_03_07_0007.abf',
-    '2025_03_02_0010.abf',
-    '2025_03_04_0009.abf',
-    '2025_03_06_0007.abf',
-    '2025_03_03_0001.abf',
-    '2025_03_05_0009.abf',
-    '2025_03_03_0006.abf',
-    '2025_03_02_0003.abf'
+    # # 16 DG
+    # '2025_05_22_0005.abf',
+    # '2025_03_06_0001.abf',
+    # '2025_03_05_0007.abf',
+    # '2025_03_04_0003.abf',
+    # '2025_03_04_0005.abf',
+    # '2025_05_22_0001.abf',
+    # '2025_03_07_0009.abf',
+    # '2025_03_07_0005.abf',
+    # '2025_03_07_0007.abf',
+    # '2025_03_02_0010.abf',
+    # '2025_03_04_0009.abf',
+    # '2025_03_06_0007.abf',
+    # '2025_03_03_0001.abf',
+    # '2025_03_05_0009.abf',
+    # '2025_03_03_0006.abf',
+    # '2025_03_02_0003.abf'
 ]
 
 base_path = os.path.join(os.path.dirname(__file__), "data")
@@ -126,13 +126,13 @@ all_proc = st.session_state.all_proc
 # random blinded trace order
 if "trace_order" not in st.session_state:
     trace_order = (
-        all_proc[["id", "intensity"]]
-        .drop_duplicates()
-        .sample(frac=1) # random_state=42
-        .reset_index(drop=True)
+        all_proc
+        .select(["id", "intensity"])
+        .unique()
+        .sample(fraction=1.0, shuffle=True)
+        .with_row_index("trace_idx")
     )
 
-    trace_order["trace_idx"] = trace_order.index
     st.session_state.trace_order = trace_order
 
 traces = st.session_state.trace_order
@@ -140,16 +140,16 @@ traces = st.session_state.trace_order
 # load saved responses
 if "responses" not in st.session_state:
     if os.path.exists(SAVE_PATH):
-        df = pd.read_csv(SAVE_PATH)
+        df = pl.read_csv(SAVE_PATH)
 
-        df = df[
-            df["fiber_volley"].notna()
-            & df["fepsp"].notna()
-            & df["population_spike"].notna()
-            & (df["fiber_volley"] != "")
-            & (df["fepsp"] != "")
-            & (df["population_spike"] != "")
-        ]
+        df = df.filter(
+            pl.col("fiber_volley").is_not_null()
+            & pl.col("fepsp").is_not_null()
+            & pl.col("population_spike").is_not_null()
+            & (pl.col("fiber_volley") != "")
+            & (pl.col("fepsp") != "")
+            & (pl.col("population_spike") != "")
+        )
 
         st.session_state.responses = {
             int(row["trace_idx"]): {
@@ -157,7 +157,7 @@ if "responses" not in st.session_state:
                 "fepsp": row["fepsp"],
                 "population_spike": row["population_spike"],
             }
-            for _, row in df.iterrows()
+            for row in df.iter_rows(named=True)
         }
 
         saved_idxs = set(st.session_state.responses.keys())
@@ -174,14 +174,18 @@ if "responses" not in st.session_state:
 # current trace
 idx = st.session_state.idx
 
-trace_info = traces.iloc[idx]
+trace_info = traces.row(idx, named=True)
 trace_id = trace_info["id"]
 trace_intensity = trace_info["intensity"]
 
-trace_df = all_proc[
-    (all_proc["id"] == trace_id)
-    & (all_proc["intensity"] == trace_intensity)
-].sort_values("time")
+trace_df = (
+    all_proc
+    .filter(
+        (pl.col("id") == trace_id)
+        & (pl.col("intensity") == trace_intensity)
+    )
+    .sort("time")
+)
 
 alias = st.session_state.alias
 
@@ -192,8 +196,8 @@ fig = go.Figure()
 
 fig.add_trace(
     go.Scatter(
-        x=trace_df["time"] * 1000,
-        y=trace_df["voltage"],
+        x=trace_df["time"].to_numpy() * 1000,
+        y=trace_df["voltage"].to_numpy(),
         mode="lines",
     )
 )
@@ -287,13 +291,13 @@ def save_response():
     }
 
     if os.path.exists(SAVE_PATH):
-        df = pd.read_csv(SAVE_PATH)
-        df = df[df["trace_idx"] != idx]
-        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+        df = pl.read_csv(SAVE_PATH)
+        df = df.filter(pl.col("trace_idx") != idx)
+        df = pl.concat([df, pl.DataFrame([row])])
     else:
-        df = pd.DataFrame([row])
+        df = pl.DataFrame([row])
 
-    df.sort_values("trace_idx").to_csv(SAVE_PATH, index=False)
+    df.sort("trace_idx").write_csv(SAVE_PATH)
 
     return True
 
@@ -307,12 +311,17 @@ with nav1:
         st.rerun()
 
 with nav3:
-    if st.button("Save + Next", disabled=idx == len(traces) - 1):
+    label = "Save + Finish" if idx == len(traces) - 1 else "Save + Next"
+
+    if st.button(label):
         if save_response():
-            st.session_state.idx += 1
-            st.rerun()
+            if idx < len(traces) - 1:
+                st.session_state.idx += 1
+                st.rerun()
+            else:
+                st.success("Review complete. Final trace saved.")
         else:
-            st.warning("Answer all questions before moving next.")
+            st.warning("Answer all questions before saving.")
 
 # optional debug
 #st.write(st.session_state.responses)

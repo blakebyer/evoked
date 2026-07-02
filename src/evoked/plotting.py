@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from pandera.typing import DataFrame
+from pandera.typing.polars import DataFrame
+import polars as pl
 import numpy as np
-from evoked.base import RecordingData, RecordingResult, IntermediateResult, window_to_indices
+from evoked.base import RecordingResult, IntermediateResult, window_to_indices
 from evoked.ols import center_signal
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
@@ -25,15 +26,18 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
                 continue
             
             rdata = r_result.result
-            rdata = rdata[rdata['intensity'].isin(intensities)]
+            rdata = rdata.filter(pl.col("intensity").is_in(intensities))
 
-            stats = rdata.groupby('intensity')['scale'].agg(['mean', 'sem']).reset_index()
+            stats = rdata.group_by("intensity").agg(
+                pl.col("scale").mean().alias("mean"),
+                (pl.col("scale").std() / pl.col("scale").count().sqrt()).alias("sem"),
+            ).sort("intensity")
             color_val = cmap(i / max(1, len(features) - 1))
 
             axes[i].errorbar(
-                stats['intensity'],
-                stats['mean'],
-                yerr=stats['sem'],
+                stats['intensity'].to_numpy(),
+                stats['mean'].to_numpy(),
+                yerr=stats['sem'].to_numpy(),
                 fmt='-o',
                 color=color_val,
                 capsize=3
@@ -51,16 +55,16 @@ def plot_io_curve(recording_result: RecordingResult, features: list[str], intens
 
 def plot_trace(intermediate: DataFrame[IntermediateResult], intensities: list[int], id_value: str, recording_result: RecordingResult | None = None, features: list[str] | None = None, annotated: bool = False, rc_params: dict | None = None):
     with plt.rc_context(rc_params):
-        intermediate = intermediate[intermediate["id"] == id_value] # plot only one slice at a time
+        intermediate = intermediate.filter(pl.col("id")==id_value)
         fig, ax = plt.subplots(figsize=(8,6))
 
         cmap = mpl.colormaps["cividis"]
 
         for i, intensity in enumerate(intensities):
             color_val = cmap(i / max(1, len(intensities) - 1)) if len(intensities) > 1 else 'black'
-            idata = intermediate[intermediate["intensity"] == intensity]
-            time = idata['time']
-            voltage = idata['voltage']
+            idata = intermediate.filter(pl.col("intensity")==intensity)
+            time = idata['time'].to_numpy()
+            voltage = idata['voltage'].to_numpy()
             ax.plot(time, voltage, color=color_val, label=f"{intensity}")
             if annotated:
                 feature_cmap = mpl.colormaps["Paired"]
@@ -71,12 +75,12 @@ def plot_trace(intermediate: DataFrame[IntermediateResult], intensities: list[in
                         continue
 
                     rdata = r_result.result
-                    rdata = rdata[
-                        (rdata["id"] == id_value) &
-                        (rdata["intensity"] == intensity)
-                    ]
+                    rdata = rdata.filter(
+                        (pl.col("id") == id_value) &
+                        (pl.col("intensity") == intensity)
+                    )
 
-                    if rdata.empty:
+                    if rdata.is_empty():
                         continue
 
                     feature_color = feature_cmap(j / max(1, len(features) - 1))
@@ -133,12 +137,12 @@ def plot_fit(
     rc_params: dict | None = None,
 ):
     with plt.rc_context(rc_params):
-        idata = intermediate[
-            (intermediate["id"] == id_value) &
-            (intermediate["intensity"] == intensity)
-        ]
+        idata = intermediate.filter(
+                (pl.col("id") == id_value) &
+                (pl.col("intensity") == intensity)
+        )
 
-        if idata.empty:
+        if idata.is_empty():
             return None, None
 
         fig, axes = plt.subplots(
@@ -151,8 +155,8 @@ def plot_fit(
 
         cmap = mpl.colormaps["Paired"]
 
-        t_vector = idata["time"].to_numpy()
-        v_vector = idata["voltage"].to_numpy()
+        time = idata["time"].to_numpy()
+        voltage = idata["voltage"].to_numpy()
 
         for i, feature in enumerate(features):
             r_result = recording_result.results[feature]
@@ -165,15 +169,15 @@ def plot_fit(
             slope_transform = r_result.slope_transform
 
             rdata = r_result.result
-            row = rdata[
-                (rdata["id"] == id_value) &
-                (rdata["intensity"] == intensity)
-            ]
+            row = rdata.filter(
+                        (pl.col("id") == id_value) &
+                        (pl.col("intensity") == intensity)
+            )
 
-            if row.empty:
+            if row.is_empty():
                 continue
 
-            row = row.iloc[0]
+            row = row.row(0, named=True)
 
             corr_arr = np.asarray(row["corr_arr"], dtype=float)
             corr = float(row["corr"])
@@ -192,15 +196,15 @@ def plot_fit(
 
             template = np.asarray(template, dtype=float).ravel()
 
-            signal = v_vector.copy()
+            signal = voltage.copy()
             if slope_transform:
-                signal = np.gradient(signal, t_vector)
+                signal = np.gradient(signal, time)
 
             center_idx = template.size // 2
             left = center_idx
             right = template.size - center_idx - 1
 
-            center_sample = int(np.argmin(np.abs(t_vector - feature_time_s)))
+            center_sample = int(np.argmin(np.abs(time - feature_time_s)))
             fit_start = center_sample - left
             fit_stop = center_sample + right + 1
 
@@ -212,7 +216,7 @@ def plot_fit(
             if snippet.size != template.size:
                 continue
 
-            rel_time_ms = (t_vector[fit_start:fit_stop] - t_vector[center_sample]) * 1000.0
+            rel_time_ms = (time[fit_start:fit_stop] - time[center_sample]) * 1000.0
 
             template_centered = center_signal(template)
             fitted = scale * template_centered + np.mean(snippet)
@@ -251,12 +255,12 @@ def plot_fit(
             axes[i, 0].legend(loc="best")
             axes[i, 0].grid(alpha=0.3)
 
-            s_start, s_stop = window_to_indices(t_vector, search_window)
+            s_start, s_stop = window_to_indices(time, search_window)
 
             first_center = s_start + left
             last_center = s_stop - right
 
-            corr_time_ms = t_vector[first_center:last_center] * 1000.0
+            corr_time_ms = time[first_center:last_center] * 1000.0
 
             # Defensive length match
             n = min(len(corr_time_ms), len(corr_arr))
@@ -314,15 +318,15 @@ def plot_detected(recording_result: RecordingResult, features: list[str], rc_par
             detection = r_result.result
             plot_df = (
                 detection
-                .groupby("intensity", as_index=False)
+                .group_by("intensity")
                 .agg(
-                    percent_detected=("detected", lambda x: x.mean() * 100)
+                    (pl.col("detected").mean() * 100).alias("percent_detected")
                 )
-            )
+            ).sort("intensity")
             
             ax.plot(
-                plot_df["intensity"], 
-                plot_df["percent_detected"],
+                plot_df["intensity"].to_numpy(), 
+                plot_df["percent_detected"].to_numpy(),
                 marker="o", 
                 label=feature,
                 color=color_val

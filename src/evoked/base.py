@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import pandera.pandas as pa
-import pandas as pd
+import pandera.polars as pa
+import polars as pl
 import numpy as np
-from pandera.typing import Series, DataFrame
+from pandera.typing.polars import Series, DataFrame
 
 def window_to_indices(
     x: np.ndarray,
@@ -72,7 +72,7 @@ class FeatureResult:
     r2_threshold: float
     noise_window: tuple[float, float] | None = None
     template: np.ndarray | None = None
-    result: DataFrame[FitResult | LDAFitResult] = field(default_factory=pd.DataFrame)
+    result: DataFrame[FitResult | LDAFitResult] = field(default_factory=pl.DataFrame)
     
 @dataclass
 class RecordingResult:

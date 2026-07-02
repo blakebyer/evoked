@@ -2,9 +2,10 @@ import pyabf
 from pathlib import Path
 from dataclasses import asdict
 from evoked.base import RecordingData, RecordingResult
-from pandera.typing import DataFrame
-import pandera as pa
-import pandas as pd
+from pandera.typing.polars import DataFrame
+import pandera.polars as pa
+import xlsxwriter
+import polars as pl
 import numpy as np
 import warnings
 import json
@@ -17,7 +18,7 @@ from contextlib import contextmanager
     <str>  <float>  <float>  <int>  <int>  
 """
 # TODO:
-# Implement other file types like NWB, or make a neo loader
+# Implement other file types like NWB, or make a neo loader. Make sure users can set the channels
 
 @contextmanager
 def as_readable_file(file):
@@ -47,7 +48,12 @@ def as_readable_file(file):
     raise TypeError(f"Unsupported file input type: {type(file)}")
 
 @pa.check_types
-def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> DataFrame[RecordingData]:
+def load_abf(
+    filename,
+    intensities: list[int],
+    id_value: str,
+    repnum: int,
+) -> DataFrame[RecordingData]:
     abf = pyabf.ABF(filename)
     n_intensities = len(intensities)
     n_sweeps = len(abf.sweepList)
@@ -62,23 +68,23 @@ def load_abf(filename, intensities: list[int], id_value: str, repnum: int) -> Da
         stim_intensity = intensities[intensity_index]
 
         data.append(
-            pd.DataFrame({
+            pl.DataFrame({
                 "id": id_value,
-                "time": np.asarray(abf.sweepX,dtype=np.float64),             
-                "voltage": np.asarray(abf.sweepY,dtype=np.float64),     
-                "intensity": stim_intensity, 
-                "sweepNumber": sweepNumber,      
+                "time": np.asarray(abf.sweepX, dtype=np.float64),
+                "voltage": np.asarray(abf.sweepY, dtype=np.float64),
+                "intensity": pl.Series([stim_intensity] * len(abf.sweepX), dtype=pl.Int64),
+                "sweepNumber": pl.Series([sweepNumber] * len(abf.sweepX), dtype=pl.Int64),
             })
         )
-    return pd.concat(data, ignore_index=True)
+    return pl.concat(data, how="vertical")
 
 @pa.check_types
 def load_csv(filename) -> DataFrame[RecordingData]:
-    return pd.read_csv(filename, index_col=False)
+    return pl.read_csv(filename)
 
 @pa.check_types
 def load_tsv(filename) -> DataFrame[RecordingData]:
-    return pd.read_csv(filename, sep='\t', index_col=False)
+    return pl.read_csv(filename, separator='\t')
 
 @pa.check_types
 def load_bulk(
@@ -128,16 +134,18 @@ def load_bulk(
                         "Suffix must be one of: .abf, .csv, or .tsv"
                     )
 
-                base_id = df["id"].iloc[0]
+                base_id = df["id"][0]
                 matches = sum(
                     1 for sid in seen_ids
                     if sid == base_id or sid.startswith(f"{base_id}_")
                 )
 
                 if matches:
-                    df["id"] = f"{base_id}_{matches}"
+                    df = df.with_columns(
+                        pl.lit(f"{base_id}_{matches}").alias("id")
+                    )
 
-                seen_ids.add(df["id"].iloc[0])
+                seen_ids.add(df["id"][0])
                 recordings.append(df)
 
             except ValueError as e:
@@ -153,7 +161,7 @@ def load_bulk(
     if not recordings:
         raise ValueError("No files were loaded.")
 
-    return pd.concat(recordings, ignore_index=True)
+    return pl.concat(recordings, how="vertical")
 
 def save_results_json(recording_result: RecordingResult, filepath: str):
     """Export recording result to JSON"""
@@ -161,46 +169,96 @@ def save_results_json(recording_result: RecordingResult, filepath: str):
     data = asdict(recording_result)
     
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, default=lambda x: x.to_dict(orient="records") if isinstance(x, pd.DataFrame) else (x.tolist() if isinstance(x, np.ndarray) else str(x)))
+        json.dump(data, f, indent=4, default=lambda x: x.to_dict(orient="records") if isinstance(x, pl.DataFrame) else (x.tolist() if isinstance(x, np.ndarray) else str(x)))
+
 
 def save_results_xlsx(recording_result: RecordingResult, path):
-    with pd.ExcelWriter(path, engine="openpyxl") as writer:
-        # Pipeline sheet
-        pp = asdict(recording_result.preprocess_params)
-        pp_df = pd.DataFrame({
-            "parameter": pp.keys(),
-            "value": [
-                json.dumps(v) if isinstance(v, (tuple, list, dict)) else v
-                for v in pp.values()
-            ],
-        })
-        pp_df.to_excel(writer, sheet_name="Pipeline", index=False)
+    workbook = xlsxwriter.Workbook(path)
 
-        # One sheet per feature
-        for name, fr in recording_result.results.items():
-            sheet = name[:31]
+    # ----------------
+    # Pipeline sheet
+    # ----------------
+    pp = asdict(recording_result.preprocess_params)
 
-            header = pd.DataFrame({
-                "parameter": [
-                    "search_window",
-                    "template_window",
-                    "slope_transform",
-                    "template",
-                ],
-                "value": [
-                    json.dumps(fr.search_window),
-                    json.dumps(fr.template_window),
-                    fr.slope_transform,
-                    json.dumps(fr.template.tolist() if isinstance(fr.template, np.ndarray) else fr.template),
-                ],
-            })
+    worksheet = workbook.add_worksheet("Pipeline")
+    worksheet.write(0, 0, "parameter")
+    worksheet.write(0, 1, "value")
 
-            result = fr.result.copy()
-            if "corr_arr" in result.columns:
-                result["corr_arr"] = result["corr_arr"].apply(
-                    lambda x: json.dumps(x.tolist() if isinstance(x, np.ndarray) else x)
+    for row_i, (key, value) in enumerate(pp.items(), start=1):
+        worksheet.write(row_i, 0, key)
+
+        if isinstance(value, np.ndarray):
+            worksheet.write(row_i, 1, json.dumps(value.tolist()))
+        elif isinstance(value, (tuple, list, dict)):
+            worksheet.write(row_i, 1, json.dumps(value))
+        elif value is None:
+            worksheet.write(row_i, 1, "")
+        else:
+            worksheet.write(row_i, 1, value)
+
+    # ----------------
+    # One sheet per feature
+    # ----------------
+    for name, fr in recording_result.results.items():
+        sheet_name = name[:31]
+        worksheet = workbook.add_worksheet(sheet_name)
+
+        template_val = (
+            fr.template.tolist()
+            if isinstance(fr.template, np.ndarray)
+            else fr.template
+        )
+
+        header_rows = [
+            ("search_window", json.dumps(fr.search_window)),
+            ("template_window", json.dumps(fr.template_window)),
+            ("slope_transform", fr.slope_transform),
+            ("r2_threshold", fr.r2_threshold),
+            ("template", json.dumps(template_val)),
+        ]
+
+        worksheet.write(0, 0, "parameter")
+        worksheet.write(0, 1, "value")
+
+        for row_i, (key, value) in enumerate(header_rows, start=1):
+            worksheet.write(row_i, 0, key)
+
+            if isinstance(value, np.ndarray):
+                worksheet.write(row_i, 1, json.dumps(value.tolist()))
+            elif isinstance(value, (tuple, list, dict)):
+                worksheet.write(row_i, 1, json.dumps(value))
+            elif value is None:
+                worksheet.write(row_i, 1, "")
+            else:
+                worksheet.write(row_i, 1, value)
+
+        result_df = (
+            fr.result.clone()
+            if isinstance(fr.result, pl.DataFrame)
+            else pl.from_pandas(fr.result)
+        )
+
+        if "corr_arr" in result_df.columns:
+            result_df = result_df.with_columns(
+                pl.col("corr_arr").map_elements(
+                    lambda x: (
+                        json.dumps(x.tolist())
+                        if isinstance(x, np.ndarray)
+                        else json.dumps(x)
+                        if isinstance(x, (list, tuple, dict))
+                        else "" if x is None
+                        else str(x)
+                    ),
+                    return_dtype=pl.String,
                 )
+            )
 
-            header.to_excel(writer, sheet_name=sheet, index=False, startrow=0)
-            result.to_excel(writer, sheet_name=sheet, index=False, startrow=len(header) + 2)
+        data_start_row = len(header_rows) + 3
 
+        result_df.write_excel(
+            workbook=workbook,
+            worksheet=worksheet,
+            position=f"A{data_start_row}",
+        )
+
+    workbook.close()

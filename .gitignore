@@ -29,5 +29,9 @@ review/
 src/evoked/examples/ca1_2026_06_19.xlsx
 src/evoked/examples/ca1_2026_06_19_2.xlsx
 src/evoked/examples/ca1_2026_06_19_3.xlsx
+src/evoked/examples/ca1_2026_06_19_4.xlsx
 src/evoked/examples/ca1_detected.png
 src/evoked/copy_files.py
+src/evoked/metadata.csv
+src/evoked/io_test.py
+.vscode
