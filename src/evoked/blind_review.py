@@ -116,7 +116,7 @@ all_files = [os.path.join(base_path, f) for f in files_list if f.endswith('.abf'
 if "all_proc" not in st.session_state:
     all_raw = load_bulk(
         all_files,
-        stimuli=INT_LIST,
+        intensities=INT_LIST,
         repnum=REPNUM,
     )
 
