@@ -6,6 +6,7 @@ import plotly.graph_objects as go
 from evoked.io import load_bulk
 from evoked.preprocess import preprocess
 from evoked.base import PreprocessParams
+import hashlib
 
 st.set_page_config(layout="wide")
 st.markdown(
@@ -115,21 +116,21 @@ all_files = [os.path.join(base_path, f) for f in files_list if f.endswith('.abf'
 if "all_proc" not in st.session_state:
     all_raw = load_bulk(
         all_files,
-        intensities=INT_LIST,
+        stimuli=INT_LIST,
         repnum=REPNUM,
     )
 
     st.session_state.all_proc = preprocess(all_raw, PARAMS)
 
 all_proc = st.session_state.all_proc
-
+seed = int(hashlib.sha256(safe_alias.encode()).hexdigest(), 16) % (2**32) # deterministic seed
 # random blinded trace order
 if "trace_order" not in st.session_state:
     trace_order = (
         all_proc
-        .select(["id", "intensity"])
+        .select(["id", "stimulus"])
         .unique()
-        .sample(fraction=1.0, shuffle=True)
+        .sample(fraction=1.0, shuffle=True, seed=seed)
         .with_row_index("trace_idx")
     )
 
@@ -176,13 +177,13 @@ idx = st.session_state.idx
 
 trace_info = traces.row(idx, named=True)
 trace_id = trace_info["id"]
-trace_intensity = trace_info["intensity"]
+trace_stimulus = trace_info["stimulus"]
 
 trace_df = (
     all_proc
     .filter(
         (pl.col("id") == trace_id)
-        & (pl.col("intensity") == trace_intensity)
+        & (pl.col("stimulus") == trace_stimulus)
     )
     .sort("time")
 )
@@ -197,7 +198,7 @@ fig = go.Figure()
 fig.add_trace(
     go.Scatter(
         x=trace_df["time"].to_numpy() * 1000,
-        y=trace_df["voltage"].to_numpy(),
+        y=trace_df["value"].to_numpy(),
         mode="lines",
     )
 )
@@ -206,7 +207,7 @@ fig.update_layout(
     height=450,
     margin=dict(l=0, r=0, t=0, b=0),
     xaxis_title="Time (ms)",
-    yaxis_title="Voltage (mV)",
+    yaxis_title="value (mV)",
     #dragmode="drawline",
     modebar_add=["drawline","eraseshape"]
 )
@@ -282,7 +283,7 @@ def save_response():
     row = {
         "trace_idx": idx,
         "id": trace_id,
-        "intensity": trace_intensity,
+        "stimulus": trace_stimulus,
         "fiber_volley": fv,
         "fepsp": fepsp,
         "population_spike": ps,
