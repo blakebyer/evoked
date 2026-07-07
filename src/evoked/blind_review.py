@@ -198,7 +198,7 @@ fig = go.Figure()
 fig.add_trace(
     go.Scatter(
         x=trace_df["time"].to_numpy() * 1000,
-        y=trace_df["value"].to_numpy(),
+        y=trace_df["voltage"].to_numpy(),
         mode="lines",
     )
 )
@@ -207,7 +207,7 @@ fig.update_layout(
     height=450,
     margin=dict(l=0, r=0, t=0, b=0),
     xaxis_title="Time (ms)",
-    yaxis_title="value (mV)",
+    yaxis_title="voltage (mV)",
     #dragmode="drawline",
     modebar_add=["drawline","eraseshape"]
 )
@@ -222,7 +222,7 @@ fig.update_layout(
 st.plotly_chart(fig, width="stretch")
 
 st.caption(
-    "Mark **Yes** only if you would report a reliable quantitative value for this feature. "
+    "Mark **Yes** only if you would report a reliable quantitative voltage for this feature. "
     "Mark **No** if the feature is absent, noisy, ambiguous, or would require guessing."
 )
 
@@ -234,8 +234,8 @@ col1, col2, col3 = st.columns(3)
 
 options = ["Unanswered", "Yes", "No"]
 
-def answer_index(value):
-    return options.index(value) if value in options else 0
+def answer_index(voltage):
+    return options.index(voltage) if voltage in options else 0
 
 current = st.session_state.responses.get(idx, {})
 
