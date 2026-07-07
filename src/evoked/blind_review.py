@@ -128,7 +128,7 @@ seed = int(hashlib.sha256(safe_alias.encode()).hexdigest(), 16) % (2**32) # dete
 if "trace_order" not in st.session_state:
     trace_order = (
         all_proc
-        .select(["id", "stimulus"])
+        .select(["id", "intensity"])
         .unique()
         .sample(fraction=1.0, shuffle=True, seed=seed)
         .with_row_index("trace_idx")
@@ -177,13 +177,13 @@ idx = st.session_state.idx
 
 trace_info = traces.row(idx, named=True)
 trace_id = trace_info["id"]
-trace_stimulus = trace_info["stimulus"]
+trace_intensity = trace_info["intensity"]
 
 trace_df = (
     all_proc
     .filter(
         (pl.col("id") == trace_id)
-        & (pl.col("stimulus") == trace_stimulus)
+        & (pl.col("intensity") == trace_intensity)
     )
     .sort("time")
 )
@@ -283,7 +283,7 @@ def save_response():
     row = {
         "trace_idx": idx,
         "id": trace_id,
-        "stimulus": trace_stimulus,
+        "intensity": trace_intensity,
         "fiber_volley": fv,
         "fepsp": fepsp,
         "population_spike": ps,
